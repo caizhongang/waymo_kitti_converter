@@ -1,0 +1,6 @@
+kitti/
+waymo_kitti/
+waymo_old/
+waymo_raw/
+__pycache__/
+*.swp
