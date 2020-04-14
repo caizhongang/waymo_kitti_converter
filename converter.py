@@ -153,7 +153,7 @@ class WaymoToKITTI(object):
         for camera in frame.context.camera_calibrations:
             if camera.name == 1:  # FRONT = 1, see dataset.proto for details
                 T_front_cam_to_vehicle = np.array(camera.extrinsic.transform).reshape(4, 4)
-                print('T_front_cam_to_vehicle\n', T_front_cam_to_vehicle)
+                # print('T_front_cam_to_vehicle\n', T_front_cam_to_vehicle)
                 T_vehicle_to_front_cam = np.linalg.inv(T_front_cam_to_vehicle)
 
                 front_cam_intrinsic = np.zeros((3, 4))
@@ -185,10 +185,10 @@ class WaymoToKITTI(object):
         calib_context += "R0_rect" + ": " + " ".join(['{}'.format(i) for i in np.eye(3).astype(np.float32).flatten()]) + '\n'
 
         Tr_velo_to_cam = cart_to_homo(T_front_cam_to_ref) @ np.linalg.inv(T_front_cam_to_vehicle)
-        print('T_front_cam_to_vehicle\n', T_front_cam_to_vehicle)
-        print('np.linalg.inv(T_front_cam_to_vehicle)\n', np.linalg.inv(T_front_cam_to_vehicle))
-        print('cart_to_homo(T_front_cam_to_ref)\n', cart_to_homo(T_front_cam_to_ref))
-        print('Tr_velo_to_cam\n',Tr_velo_to_cam)
+        # print('T_front_cam_to_vehicle\n', T_front_cam_to_vehicle)
+        # print('np.linalg.inv(T_front_cam_to_vehicle)\n', np.linalg.inv(T_front_cam_to_vehicle))
+        # print('cart_to_homo(T_front_cam_to_ref)\n', cart_to_homo(T_front_cam_to_ref))
+        # print('Tr_velo_to_cam\n',Tr_velo_to_cam)
         calib_context += "Tr_velo_to_cam" + ": " + " ".join(['{}'.format(i) for i in Tr_velo_to_cam[:3, :].reshape(12)]) + '\n'
 
         with open(CALIB_PATH + '/' + str(file_num).zfill(FILE_INDEX_LENGTH) + '-' + str(frame_num).zfill(
@@ -279,6 +279,15 @@ class WaymoToKITTI(object):
 
             my_type = self.__type_list[obj.type]
 
+            waymo_to_kitti_class_map = {
+                'PEDESTRIAN': 'Pedestrian',
+                'VEHICLE': 'Car',
+                'CYCLIST': 'Cyclist',
+                'SIGN': 'Sign'  # not in kitti
+            }
+
+            my_type = waymo_to_kitti_class_map[my_type]
+
             # length: along the longer axis that is perpendicular to gravity direction
             # width: along the shorter axis  that is perpendicular to gravity direction
             # height: along the gravity direction
@@ -293,13 +302,13 @@ class WaymoToKITTI(object):
             y = obj.box.center_y
             z = obj.box.center_z - height / 2
 
-            print('bef', x,y,z)
+            # print('bef', x,y,z)
 
             # project bounding box to the virtual reference frame
             pt_ref = cart_to_homo(self.T_front_cam_to_ref) @ self.T_vehicle_to_front_cam @ np.array([x,y,z,1]).reshape((4,1))
             x, y, z, _ = pt_ref.flatten().tolist()
 
-            print('aft', x,y,z)
+            # print('aft', x,y,z)
 
             # x, y, z correspond to l, w, h (waymo) -> l, h, w (kitti)
             # length, width, height = length, height, width
@@ -348,7 +357,7 @@ class WaymoToKITTI(object):
             fp_label_all.write(line_all)
         fp_label_all.close()
 
-        print(file_num, frame_num)
+        # print(file_num, frame_num)
 
     def get_file_names(self):
         self.__file_names = []
