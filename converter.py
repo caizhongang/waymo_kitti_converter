@@ -32,7 +32,7 @@ LABEL_PATH = KITTI_PATH + '/label_'
 LABEL_ALL_PATH = KITTI_PATH + '/label_all'
 IMAGE_PATH = KITTI_PATH + '/image_'
 CALIB_PATH = KITTI_PATH + '/calib'
-LIDAR_PATH = KITTI_PATH + '/lidar'
+LIDAR_PATH = KITTI_PATH + '/velodyne'
 
 
 ###############################################################################
