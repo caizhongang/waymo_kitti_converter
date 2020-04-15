@@ -119,6 +119,8 @@ def transform_pc(pc, R0, V2C):
 
 
 def main():
+    # visualized in lidar frame
+
     pc = pk_utils.load_velo_scan(pc_pathname)
     print('pc, just loaded', pc.shape)
     pc = pc[:, :3]

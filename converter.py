@@ -142,11 +142,17 @@ class WaymoToKITTI(object):
         calib_context = ''
 
         # front-left-up -> right-down-front
+        # T_front_cam_to_ref = np.array([
+        #     [0.0, -1.0, 0.0],
+        #     [-1.0, 0.0, 0.0],
+        #     [0.0, 0.0, 1.0]
+        # ])
         T_front_cam_to_ref = np.array([
             [0.0, -1.0, 0.0],
-            [-1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0]
+            [0.0, 0.0, -1.0],
+            [1.0, 0.0, 0.0]
         ])
+
 
         # print('context\n',frame.context)
 
