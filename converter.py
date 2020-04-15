@@ -136,8 +136,13 @@ class WaymoToKITTI(object):
         #   set Tr_velo_to_cam = T_front_cam_to_ref * Tr_vehicle_to_front_cam = T_front_cam_to_ref * inv(Tr_front_cam_to_vehicle)
         #       as vehicle and lidar use the same frame after fusion
         #   set R0_rect = identity
-        #   set P2 = front_cam_intrinsics * Tr_front_cam_to_front_cam * inv(T_front_cam_to_ref) = front_cam_intrinsics * inv(T_front_cam_to_ref)
+        #   set P2 = front_cam_intrinsics * Tr_waymo_to_conv * Tr_front_cam_to_front_cam * inv(T_front_cam_to_ref)
         #   note: front cam is cam_0 in kitti, whereas has name = 1 in waymo
+        #   note: waymo camera has a front-left-up frame,
+        #       instead of the conventional right-down-front frame
+        #       Tr_waymo_to_conv is used to offset this difference. However, Tr_waymo_to_conv is the same as
+        #       T_front_cam_to_ref, hence,
+        #   set P2 = front_cam_intrinsics
 
         calib_context = ''
 
@@ -152,6 +157,11 @@ class WaymoToKITTI(object):
             [0.0, 0.0, -1.0],
             [1.0, 0.0, 0.0]
         ])
+        # T_ref_to_front_cam = np.array([
+        #     [0.0, 0.0, 1.0],
+        #     [-1.0, 0.0, 0.0],
+        #     [0.0, -1.0, 0.0]
+        # ])
 
 
         # print('context\n',frame.context)
@@ -171,6 +181,8 @@ class WaymoToKITTI(object):
 
                 break
 
+        print('front_cam_intrinsic\n', front_cam_intrinsic)
+
         self.T_front_cam_to_ref = T_front_cam_to_ref.copy()
         self.T_vehicle_to_front_cam = T_vehicle_to_front_cam.copy()
 
@@ -181,9 +193,10 @@ class WaymoToKITTI(object):
             if i == 2:
                 # note: front camera is labeled camera 2 (kitti) or camera 0 (waymo)
                 #   other Px are given dummy values. this is to ensure compatibility. They are seldom used anyway.
-                tmp = cart_to_homo(np.linalg.inv(T_front_cam_to_ref))
+                # tmp = cart_to_homo(np.linalg.inv(T_front_cam_to_ref))
                 # print(front_cam_intrinsic.shape, tmp.shape)
-                P2 = np.matmul(front_cam_intrinsic, tmp).reshape(12)
+                # P2 = np.matmul(front_cam_intrinsic, tmp).reshape(12)
+                P2 = front_cam_intrinsic.reshape(12)
                 calib_context += "P2: " + " ".join(['{}'.format(i) for i in P2]) + '\n'
             else:
                 calib_context += "P" + str(i) + ": " + " ".join(['{}'.format(i) for i in identity_3x4.reshape(12)]) + '\n'
