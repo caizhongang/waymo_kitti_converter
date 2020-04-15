@@ -181,7 +181,7 @@ class WaymoToKITTI(object):
 
                 break
 
-        print('front_cam_intrinsic\n', front_cam_intrinsic)
+        # print('front_cam_intrinsic\n', front_cam_intrinsic)
 
         self.T_front_cam_to_ref = T_front_cam_to_ref.copy()
         self.T_vehicle_to_front_cam = T_vehicle_to_front_cam.copy()
