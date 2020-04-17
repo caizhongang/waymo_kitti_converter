@@ -1,6 +1,11 @@
 kitti/
+waymo/
 waymo_kitti/
 waymo_old/
 waymo_raw/
+waymo_kitti_results/
+waymo_submission/
 __pycache__/
 *.swp
+*.tar.gz
+
