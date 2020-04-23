@@ -198,10 +198,10 @@ class KITTI2Waymo(object):
 
     def process(self):
 
-        # print("start converting ...")
-        # with Pool(NUM_PROC) as p:
-        #     r = list(tqdm.tqdm(p.imap(self.process_one, range(len(self.waymo_tfrecord_pathnames))), total=len(self.waymo_tfrecord_pathnames)))
-        # print("\nfinished ...")
+        print("start converting ...")
+        with Pool(NUM_PROC) as p:
+            r = list(tqdm.tqdm(p.imap(self.process_one, range(len(self.waymo_tfrecord_pathnames))), total=len(self.waymo_tfrecord_pathnames)))
+        print("\nfinished ...")
 
         # combine all files into one .bin
         pathnames = sorted(glob(join(waymo_results_save_dir, '*.bin')))
