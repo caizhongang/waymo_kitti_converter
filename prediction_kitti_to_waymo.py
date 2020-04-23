@@ -19,6 +19,9 @@ waymo_tfrecords_load_dir = '/home/alex/github/waymo_to_kitti_converter/tools/way
 waymo_results_save_dir = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_submission/20200417-bin'
 waymo_results_comb_save_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_submission/20200417.bin'
 
+is_val = True  # val has prefix
+val_prefix = '9'
+
 NUM_PROC = 1
 
 def _create_pd_file_example():
@@ -172,7 +175,10 @@ class KITTI2Waymo(object):
             frame = open_dataset.Frame()
             frame.ParseFromString(bytearray(frame_data.numpy()))
 
-            kitti_result_pathname = join(kitti_results_load_dir, '{:05d}-{:05d}.txt'.format(file_num, frame_num))
+            if is_val:
+                kitti_result_pathname = join(kitti_results_load_dir, val_prefix + '{:05d}-{:05d}.txt'.format(file_num, frame_num))
+            else:
+                kitti_result_pathname = join(kitti_results_load_dir, '{:05d}-{:05d}.txt'.format(file_num, frame_num))
 
             # prepare transformation matrix from kitti to waymo
             # here, the kitti frame is a virtual reference frame
