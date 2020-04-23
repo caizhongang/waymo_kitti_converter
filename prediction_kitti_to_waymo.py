@@ -97,7 +97,7 @@ class KITTI2Waymo(object):
 
     def get_file_names(self):
         self.waymo_tfrecord_pathnames = sorted(glob(join(waymo_tfrecords_load_dir, '*.tfrecord')))
-        print(len(self.waymo_tfrecord_pathnames))
+        print(len(self.waymo_tfrecord_pathnames), 'tfrecords found.')
 
 
     def create_folder(self):
@@ -189,7 +189,7 @@ class KITTI2Waymo(object):
 
             objects = self.parse_objects(kitti_result_pathname, T_k2w, context_name, frame_timestamp_micros)
 
-            print(file_num, frame_num, '\n', objects)
+            # print(file_num, frame_num, '\n', objects)
 
             # Write objects to a file.
             with open(join(waymo_results_save_dir, '{:05d}-{:05d}.bin'.format(file_num, frame_num)), 'wb') as f:
@@ -215,7 +215,7 @@ class KITTI2Waymo(object):
         #     for pathname in pathnames:
         #         tar.add(pathname)
 
-    def transform(T, x, y, z):
+    def transform(self, T, x, y, z):
         pt_bef = np.array([x, y, z, 1.0]).reshape(4,1)
         pt_aft = np.matmul(T, pt_bef)
         # print(pt_aft)
