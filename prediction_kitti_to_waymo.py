@@ -5,7 +5,7 @@ import tensorflow as tf
 from glob import glob
 import tqdm
 from multiprocessing import Pool
-import tarfile
+# import tarfile
 import numpy as np
 
 from waymo_open_dataset import dataset_pb2
@@ -16,7 +16,8 @@ from waymo_open_dataset import dataset_pb2 as open_dataset
 kitti_results_load_dir = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti_results/data'
 waymo_tfrecords_load_dir = '/home/alex/github/waymo_to_kitti_converter/tools/waymo/testing'
 
-waymo_results_save_dir = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_submission/20200417'
+waymo_results_save_dir = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_submission/20200417-bin'
+waymo_results_comb_save_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_submission/20200417.bin'
 
 NUM_PROC = 1
 
@@ -197,23 +198,40 @@ class KITTI2Waymo(object):
 
     def process(self):
 
-        print("start converting ...")
-        with Pool(NUM_PROC) as p:
-            r = list(tqdm.tqdm(p.imap(self.process_one, range(len(self.waymo_tfrecord_pathnames))), total=len(self.waymo_tfrecord_pathnames)))
-        print("\nfinished ...")
+        # print("start converting ...")
+        # with Pool(NUM_PROC) as p:
+        #     r = list(tqdm.tqdm(p.imap(self.process_one, range(len(self.waymo_tfrecord_pathnames))), total=len(self.waymo_tfrecord_pathnames)))
+        # print("\nfinished ...")
 
-        # compress all files into one .tar.gz
+        # combine all files into one .bin
         pathnames = sorted(glob(join(waymo_results_save_dir, '*.bin')))
-        with tarfile.open(join(waymo_results_save_dir, '../submission.tar.gz'), mode='w:gz') as tar:
-            for pathname in pathnames:
-                tar.add(pathname)
+        combined = self.combine(pathnames)
 
+        with open(waymo_results_comb_save_pathname, 'wb') as f:
+            f.write(combined.SerializeToString())
 
-    def transform(self, T, x, y, z):
+        # pathnames = sorted(glob(join(waymo_results_save_dir, '*.bin')))
+        # with tarfile.open(join(waymo_results_save_dir, '../submission.tar.gz'), mode='w:gz') as tar:
+        #     for pathname in pathnames:
+        #         tar.add(pathname)
+
+    def transform(T, x, y, z):
         pt_bef = np.array([x, y, z, 1.0]).reshape(4,1)
         pt_aft = np.matmul(T, pt_bef)
         # print(pt_aft)
         return pt_aft[:3].flatten().tolist()
+
+    def combine(self, pathnames):
+        combined = metrics_pb2.Objects()
+
+        for pathname in pathnames:
+            objects = metrics_pb2.Objects()
+            with open(pathname, 'rb') as f:
+                objects.ParseFromString(f.read())
+            for o in objects.objects:
+                combined.objects.append(o)
+
+        return combined
 
 
 def main():
