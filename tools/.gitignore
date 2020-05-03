@@ -5,6 +5,7 @@ waymo_old/
 waymo_raw/
 waymo_kitti_results/
 waymo_submission/
+dataloader/
 __pycache__/
 *.swp
 *.tar.gz

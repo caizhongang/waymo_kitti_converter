@@ -124,7 +124,7 @@ class KITTI2Waymo(object):
             score = float(attrs[15])
 
             # y: downwards; move box origin from bottom center (kitti) to true center (waymo)
-            y = float(attrs[12]) + height / 2
+            y = float(attrs[12]) - height / 2
             x, y, z = self.transform(T_k2w, x, y, z)  # frame transformation: kitti -> waymo
 
             # different conventions
@@ -187,7 +187,7 @@ class KITTI2Waymo(object):
                 if camera.name == 1:  # FRONT = 1, see dataset.proto for details
                     T_front_cam_to_vehicle = np.array(camera.extrinsic.transform).reshape(4, 4)
 
-            T_k2w = T_front_cam_to_vehicle * self.T_ref_to_front_cam
+            T_k2w = T_front_cam_to_vehicle @ self.T_ref_to_front_cam
 
             # prepare context_name and frame_timestamp_micros
             context_name = frame.context.name

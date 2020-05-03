@@ -10,11 +10,22 @@ from objects3d_utils import get_objects_from_label
 # label_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/kitti//label_2/000002.txt'
 # calib_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/kitti/calib/000002.txt'
 
-# use my own tool
-pc_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/lidar/00000-00001.bin'
-label_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/label_all/00000-00001.txt'
-calib_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/calib/00000-00001.txt'
+# kitti
+# pc_pathname = '/media/alex/Seagate Expansion Drive/kitti/velodyne/training/velodyne/002394.bin'
+# label_pathname = '/media/alex/Seagate Expansion Drive/kitti/label/training/label_2/002394.txt'
+# calib_pathname = '/media/alex/Seagate Expansion Drive/kitti/calib/training/calib/002394.txt'
 
+# use my own tool
+pc_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/velodyne/00000-00000.bin'
+label_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/label_all/00000-00000.txt'
+calib_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/calib/00000-00000.txt'
+
+# pc_pathname = '/media/alex/Seagate Expansion Drive/waymo_open_dataset_kitti/training(partial)/velodyne/00000-00000.bin'
+# label_pathname = '/media/alex/Seagate Expansion Drive/waymo_open_dataset_kitti/training(partial)/label_all/00000-00000.txt'
+# calib_pathname = '/media/alex/Seagate Expansion Drive/waymo_open_dataset_kitti/training(partial)/calib/00000-00000.txt'
+
+# pc_range = [0, -40, -3.0, 70.4, 40, 3.0]
+pc_range = None
 
 # def read_calib_file(filepath):
 #     """Read in a calibration file and parse into a dictionary."""
@@ -49,7 +60,7 @@ def corners_to_lines(qs):
     idx = [(1,0), (5,4), (2,3), (6,7), (1,2), (5,6), (0,3), (4,7), (1,5), (0,4), (2,6), (3,7)]
 
     # print('draw bbox')
-    # print(qs)
+    # print('qs', qs)
 
     line_set = o3d.geometry.LineSet(
         points=o3d.utility.Vector3dVector(qs),
@@ -84,14 +95,25 @@ def boxes3d_to_corners3d_lidar(boxes3d, bottom_center=True):
 
     ry = boxes3d[:, 6]
     zeros, ones = np.zeros(ry.size, dtype=np.float32), np.ones(ry.size, dtype=np.float32)
+
+    print('ry\n', ry)
+
     rot_list = np.array([[np.cos(ry), -np.sin(ry), zeros],
                          [np.sin(ry), np.cos(ry),  zeros],
                          [zeros,      zeros,        ones]])  # (3, 3, N)
     R_list = np.transpose(rot_list, (2, 0, 1))  # (N, 3, 3)
 
+    print('Rot\n', R_list[-1])
+
     temp_corners = np.concatenate((x_corners.reshape(-1, 8, 1), y_corners.reshape(-1, 8, 1),
                                    z_corners.reshape(-1, 8, 1)), axis=2)  # (N, 8, 3)
+
+    print('corners', temp_corners[-1])
+
     rotated_corners = np.matmul(temp_corners, R_list)  # (N, 8, 3)
+
+    print('rotated_corners', rotated_corners[-1])
+
     x_corners, y_corners, z_corners = rotated_corners[:, :, 0], rotated_corners[:, :, 1], rotated_corners[:, :, 2]
 
     x_loc, y_loc, z_loc = boxes3d[:, 0], boxes3d[:, 1], boxes3d[:, 2]
@@ -100,7 +122,12 @@ def boxes3d_to_corners3d_lidar(boxes3d, bottom_center=True):
     y = y_loc.reshape(-1, 1) + y_corners.reshape(-1, 8)
     z = z_loc.reshape(-1, 1) + z_corners.reshape(-1, 8)
 
+    # print('bbox\n', np.stack([x_loc, y_loc, z_loc, w, l, h, ry], axis=0).T)
+
     corners = np.concatenate((x.reshape(-1, 8, 1), y.reshape(-1, 8, 1), z.reshape(-1, 8, 1)), axis=2)
+
+    print('shifted_corners\n', corners[-1])
+    # print(corners.shape)
 
     return corners.astype(np.float32)
 
@@ -118,10 +145,35 @@ def transform_pc(pc, R0, V2C):
     return tf_pc
 
 
+def filter_range(pc, pc_range):
+    xmin, ymin, zmin, xmax, ymax, zmax = pc_range
+    cond1 = xmin < pc[:, 0]
+    cond2 = pc[:, 0] < xmax
+    cond3 = ymin < pc[:, 1]
+    cond4 = pc[:, 1] < ymax
+    cond5 = zmin < pc[:, 2]
+    cond6 = pc[:, 2] < zmax
+
+    print(cond1, cond2, cond3, cond4, cond5, cond6)
+
+    s = (cond1.astype(np.int) + cond2.astype(np.int) + cond3.astype(np.int) + cond4.astype(np.int) + cond5.astype(np.int) + cond6.astype(np.int))
+    print(s)
+
+    select = s == 6
+    print(sum(select), len(select))
+    return pc[select]
+
+
 def main():
     # visualized in lidar frame
 
-    pc = pk_utils.load_velo_scan(pc_pathname)
+    # pc = pk_utils.load_velo_scan(pc_pathname)
+    pc = np.fromfile(pc_pathname, dtype=np.float32).reshape(-1, 4)
+    print('pc', pc)
+
+    if pc_range is not None:
+        pc = filter_range(pc, pc_range)
+
     print('pc, just loaded', pc.shape)
     pc = pc[:, :3]
     print('pc, after slicing', pc.shape)
@@ -141,6 +193,7 @@ def main():
     # print(pc.shape)
 
     obj_list = get_objects_from_label(label_pathname)
+    obj_list = [o for o in obj_list if o.cls_type in ['Car', 'Pedestrian', 'Cyclist']]
     calib = Calibration(calib_pathname)
 
     loc = np.concatenate([obj.loc.reshape(1, 3) for obj in obj_list], axis=0)
@@ -175,11 +228,15 @@ def main():
         size=1, origin=[0,0,0])
 
     visual = [pcd, axis]
-    #visual = [pcd]
-
+    # visual = [pcd]
+    #
+    # print('add bbox3d')
     for bbox3d in bboxes3d:
+        # print(bbox3d)
         visual.append(corners_to_lines(bbox3d))
-    
+
+
+
     o3d.visualization.draw_geometries(visual)
 
 

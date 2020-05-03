@@ -20,7 +20,7 @@ KITTI_PATH = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti'
 # number of processes
 NUM_PROC = 1
 # location filter, use this to convert your preferred location
-LOCATION_FILTER = True
+LOCATION_FILTER = False
 LOCATION_NAME = ['location_sf']
 # max indexing length, saved file naming convention: <file_idx>-<frame_idx>.xxx
 FILE_INDEX_LENGTH = 5
