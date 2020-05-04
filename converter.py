@@ -13,20 +13,18 @@ from waymo_open_dataset import dataset_pb2 as open_dataset
 
 
 ############################Config###########################################
-# path to waymo dataset "folder" (all .tfrecord files in that folder will be converted)
 DATA_PATH = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_raw'
-# path to save kitti dataset
 KITTI_PATH = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti'
 # number of processes
 NUM_PROC = 1
 # location filter, use this to convert your preferred location
 LOCATION_FILTER = False
 LOCATION_NAME = ['location_sf']
-# max indexing length, saved file naming convention: <file_idx>-<frame_idx>.xxx
-FILE_INDEX_LENGTH = 5
-FRAME_INDEX_LENGTH = 5
-# as name
-IMAGE_FORMAT = 'png'
+# prefix name
+# file naming:
+# prefix(1 digit) + file idx(3 digits) + frame idx (3 digits)
+# e.g. 0123123.extension
+PREFIX = '0'  #
 # do not change
 LABEL_PATH = KITTI_PATH + '/label_'
 LABEL_ALL_PATH = KITTI_PATH + '/label_all'
@@ -34,6 +32,38 @@ IMAGE_PATH = KITTI_PATH + '/image_'
 CALIB_PATH = KITTI_PATH + '/calib'
 LIDAR_PATH = KITTI_PATH + '/velodyne'
 
+
+# Uncomment waymo classes for conversion
+# Note: Waymo-od evals for ALL_NS, including only 'VEHICLE', 'PEDESTRIAN', 'CYCLIST'
+selected_waymo_classes = [
+    # 'UNKNOWN',
+    'VEHICLE',
+    'PEDESTRIAN',
+    # 'SIGN',
+    'CYCLIST'
+]
+
+# KITTI format does not have a separate val set
+# Hence, training set and validation set are merged into one
+# To differentiate data from these two sets, the files have different prefixes
+# Domain adaptation dataset has some labelled data also, they can be optionally added in
+# The following number lists will be produced:
+# train.txt, val.txt, test.txt, trainval.txt, all_labelled.txt (optional)
+# data_load_dirs = {
+#     'Training': '',
+#     'Validation': '',
+#     'Testing': '',
+#     'Domain_Adaption_Training_Labelled': '',
+#     'Domain_Adaption_Validation_labelled': '',
+# }
+
+
+# Some 3D bounding boxes do not contain any points
+# filter_empty_3dbox, when set True, removes these boxes
+filter_empty_3dbox = True
+
+# Some frames do not contain any ground truth bounding boxes
+# filter_empty_frame = False
 
 ###############################################################################
 
@@ -47,6 +77,7 @@ def cart_to_homo(mat):
     else:
         raise ValueError(mat.shape)
     return ret
+
 
 class WaymoToKITTI(object):
 
@@ -104,11 +135,10 @@ class WaymoToKITTI(object):
                 :return:
         """
         for img in frame.images:
-            img_path = IMAGE_PATH + str(img.name - 1) + '/' + str(file_num).zfill(FILE_INDEX_LENGTH) + '-' + str(
-                frame_num).zfill(FRAME_INDEX_LENGTH) + '.' + IMAGE_FORMAT
+            img_path = IMAGE_PATH + str(img.name - 1) + '/' + str(PREFIX) + str(file_num).zfill(3) + str(frame_num).zfill(3) + '.png'
             img = cv2.imdecode(np.frombuffer(img.image, np.uint8), cv2.IMREAD_COLOR)
             rgb_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-            plt.imsave(img_path, rgb_img, format=IMAGE_FORMAT)
+            plt.imsave(img_path, rgb_img, format='png')
 
     def save_calib(self, frame, file_num, frame_num):
         """ parse and save the calibration data
@@ -163,7 +193,6 @@ class WaymoToKITTI(object):
         #     [0.0, -1.0, 0.0]
         # ])
 
-
         # print('context\n',frame.context)
 
         for camera in frame.context.camera_calibrations:
@@ -210,8 +239,7 @@ class WaymoToKITTI(object):
         # print('Tr_velo_to_cam\n',Tr_velo_to_cam)
         calib_context += "Tr_velo_to_cam" + ": " + " ".join(['{}'.format(i) for i in Tr_velo_to_cam[:3, :].reshape(12)]) + '\n'
 
-        with open(CALIB_PATH + '/' + str(file_num).zfill(FILE_INDEX_LENGTH) + '-' + str(frame_num).zfill(
-            FRAME_INDEX_LENGTH) + '.txt', 'w+') as fp_calib:
+        with open(CALIB_PATH + '/' + str(PREFIX) + str(file_num).zfill(3) + str(frame_num).zfill(3) + '.txt', 'w+') as fp_calib:
             fp_calib.write(calib_context)
 
     def save_lidar(self, frame, file_num, frame_num):
@@ -256,8 +284,7 @@ class WaymoToKITTI(object):
         # print(point_cloud.shape)
 
         # save
-        pc_path = LIDAR_PATH + '/' + str(file_num).zfill(FILE_INDEX_LENGTH) + '-' + str(frame_num).zfill(
-            FRAME_INDEX_LENGTH) + '.bin'
+        pc_path = LIDAR_PATH + '/' + str(PREFIX) + str(file_num).zfill(3) + str(frame_num).zfill(3) + '.bin'
         point_cloud.astype(np.float32).tofile(pc_path)  # note: must save as float32, otherwise loading errors
 
     def save_label(self, frame, file_num, frame_num):
@@ -267,8 +294,7 @@ class WaymoToKITTI(object):
                 :param frame_num: the current frame number
                 :return:
                 """
-        fp_label_all = open(LABEL_ALL_PATH + '/' + str(file_num).zfill(FILE_INDEX_LENGTH) + '-' + str(frame_num).zfill(
-            FRAME_INDEX_LENGTH) + '.txt', 'w+')
+        fp_label_all = open(LABEL_ALL_PATH + '/' + str(PREFIX) + str(file_num).zfill(3) + str(frame_num).zfill(3) + '.txt', 'w+')
         # preprocess bounding box data
         id_to_bbox = dict()
         id_to_name = dict()
@@ -298,7 +324,14 @@ class WaymoToKITTI(object):
 
             my_type = self.__type_list[obj.type]
 
+            if my_type not in selected_waymo_classes:
+                continue
+
+            if filter_empty_3dbox and obj.num_lidar_points_in_box < 1:
+                continue
+
             waymo_to_kitti_class_map = {
+                'UNKNOWN': 'DontCare',
                 'PEDESTRIAN': 'Pedestrian',
                 'VEHICLE': 'Car',
                 'CYCLIST': 'Cyclist',
@@ -347,7 +380,7 @@ class WaymoToKITTI(object):
             occluded = 0
 
             # alpha:
-            # we set alpha to the default -10, the same as nuscens to kitti tool
+            # we set alpha to the default -10, the same as nuscenes to kitti tool
             # contribution is welcome
             alpha = -10
 
@@ -368,8 +401,7 @@ class WaymoToKITTI(object):
                                                                                    round(rotation_y, 2))
             line_all = line[:-1] + ' ' + name + '\n'
             # store the label
-            fp_label = open(LABEL_PATH + name + '/' + str(file_num).zfill(FILE_INDEX_LENGTH) + '-' + str(frame_num).zfill(
-                FRAME_INDEX_LENGTH) + '.txt', 'a')
+            fp_label = open(LABEL_PATH + name + '/' + str(PREFIX) + str(file_num).zfill(3) + str(frame_num).zfill(3) + '.txt', 'a')
             fp_label.write(line)
             fp_label.close()
 
