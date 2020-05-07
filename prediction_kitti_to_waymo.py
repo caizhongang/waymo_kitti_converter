@@ -19,8 +19,7 @@ waymo_tfrecords_load_dir = '/home/alex/github/waymo_to_kitti_converter/tools/way
 waymo_results_save_dir = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_submission/20200417-bin'
 waymo_results_comb_save_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_submission/20200417.bin'
 
-is_val = True  # val has prefix
-val_prefix = '9'
+prefix = '1'
 
 NUM_PROC = 1
 
@@ -175,10 +174,7 @@ class KITTI2Waymo(object):
             frame = open_dataset.Frame()
             frame.ParseFromString(bytearray(frame_data.numpy()))
 
-            if is_val:
-                kitti_result_pathname = join(kitti_results_load_dir, val_prefix + '{:05d}-{:05d}.txt'.format(file_num, frame_num))
-            else:
-                kitti_result_pathname = join(kitti_results_load_dir, '{:05d}-{:05d}.txt'.format(file_num, frame_num))
+            kitti_result_pathname = join(kitti_results_load_dir, '{}{:03d}{:03d}.txt'.format(str(prefix), file_num, frame_num))
 
             # prepare transformation matrix from kitti to waymo
             # here, the kitti frame is a virtual reference frame
@@ -202,7 +198,7 @@ class KITTI2Waymo(object):
             # print(file_num, frame_num, '\n', objects)
 
             # Write objects to a file.
-            with open(join(waymo_results_save_dir, '{:05d}-{:05d}.bin'.format(file_num, frame_num)), 'wb') as f:
+            with open(join(waymo_results_save_dir, '{}{:03d}{:03d}.txt'.format(str(prefix), file_num, frame_num)), 'wb') as f:
                 f.write(objects.SerializeToString())
 
 
