@@ -198,7 +198,7 @@ class KITTI2Waymo(object):
             # print(file_num, frame_num, '\n', objects)
 
             # Write objects to a file.
-            with open(join(waymo_results_save_dir, '{}{:03d}{:03d}.txt'.format(str(prefix), file_num, frame_num)), 'wb') as f:
+            with open(join(waymo_results_save_dir, '{}{:03d}{:03d}.bin'.format(str(prefix), file_num, frame_num)), 'wb') as f:
                 f.write(objects.SerializeToString())
 
 
