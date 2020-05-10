@@ -7,14 +7,13 @@ import tensorflow as tf
 import tqdm
 from multiprocessing import Pool
 
-from waymo_open_dataset.utils import range_image_utils
-from waymo_open_dataset.utils import transform_utils
+from waymo_open_dataset.utils.frame_utils import parse_range_image_and_camera_projection, convert_range_image_to_point_cloud
 from waymo_open_dataset import dataset_pb2 as open_dataset
 
 
 ############################Config###########################################
-DATA_PATH = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_raw'
-KITTI_PATH = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti'
+DATA_PATH = '/media/alex/Seagate Expansion Drive/waymo_open_dataset/domain_adaptation_training_labelled(partial)'
+KITTI_PATH = '/home/alex/github/waymo_to_kitti_converter/tools/pkl_debug/converted'
 # number of processes
 NUM_PROC = 1
 # location filter, use this to convert your preferred location
@@ -24,7 +23,7 @@ LOCATION_NAME = ['location_sf']
 # file naming:
 # prefix(1 digit) + file idx(3 digits) + frame idx (3 digits)
 # e.g. 0123123.extension
-PREFIX = '0'  #
+PREFIX = '4'  #
 # do not change
 LABEL_PATH = KITTI_PATH + '/label_'
 LABEL_ALL_PATH = KITTI_PATH + '/label_all'
@@ -249,16 +248,34 @@ class WaymoToKITTI(object):
                 :param frame_num: the current frame number
                 :return:
                 """
-        range_images, range_image_top_pose = self.parse_range_image_and_camera_projection(
-            frame)
-
-        points, intensity = self.convert_range_image_to_point_cloud(
+        range_images, camera_projections, range_image_top_pose = parse_range_image_and_camera_projection(frame)
+        points_0, cp_points_0 = convert_range_image_to_point_cloud(
             frame,
             range_images,
-            range_image_top_pose)
+            camera_projections,
+            range_image_top_pose,
+            ri_index=0
+        )
+        intensity_0 = self.get_intensity(frame, range_images, ri_index=0)
+        points_0 = np.concatenate(points_0, axis=0)
+        intensity_0 = np.concatenate(intensity_0, axis=0)
 
-        points = np.concatenate(points, axis=0)
-        intensity = np.concatenate(intensity, axis=0)
+        points_1, cp_points_1 = convert_range_image_to_point_cloud(
+            frame,
+            range_images,
+            camera_projections,
+            range_image_top_pose,
+            ri_index=1
+        )
+        intensity_1 = self.get_intensity(frame, range_images, ri_index=1)
+        points_1 = np.concatenate(points_1, axis=0)
+        intensity_1 = np.concatenate(intensity_1, axis=0)
+
+        points = np.concatenate([points_0, points_1], axis=0)
+        # print('points_0', points_0.shape, 'points_1', points_1.shape, 'points', points.shape)
+        intensity = np.concatenate([intensity_0, intensity_1], axis=0)
+        # points = points_1
+        # intensity = intensity_1
 
         # reference frame:
         # front-left-up (waymo) -> right-down-front(kitti)
@@ -280,6 +297,9 @@ class WaymoToKITTI(object):
 
         # concatenate x,y,z and intensity
         point_cloud = np.column_stack((points, intensity))
+
+        # TODO: debug
+        self.pc = points
 
         # print(point_cloud.shape)
 
@@ -308,6 +328,7 @@ class WaymoToKITTI(object):
                 id_to_bbox[label.id] = bbox
                 id_to_name[label.id] = name - 1
 
+        # print([i.type for i in frame.laser_labels])
         for obj in frame.laser_labels:
 
             # calculate bounding box
@@ -319,8 +340,11 @@ class WaymoToKITTI(object):
                     bounding_box = id_to_bbox.get(id + lidar)
                     name = str(id_to_name.get(id + lidar))
                     break
+
+            # TODO: temp fix
             if bounding_box == None or name == None:
-                continue
+                name = '0'
+                bounding_box = (0, 0, 0, 0)
 
             my_type = self.__type_list[obj.type]
 
@@ -329,6 +353,21 @@ class WaymoToKITTI(object):
 
             if filter_empty_3dbox and obj.num_lidar_points_in_box < 1:
                 continue
+
+            # from waymo_open_dataset.utils.box_utils import compute_num_points_in_box_3d
+            # print('annot:', obj.num_lidar_points_in_box)
+            # num_points_in_gt_waymo = compute_num_points_in_box_3d(
+            #     tf.convert_to_tensor(self.pc.astype(np.float32), dtype=tf.float32),
+            #     tf.convert_to_tensor(np.array([[obj.box.center_x, obj.box.center_y, obj.box.center_z,  obj.box.length,obj.box.width,  obj.box.height,obj.box.heading]]).astype(np.float32), dtype=tf.float32))
+            # print('actual:', num_points_in_gt_waymo.numpy())
+
+            # visualizer
+            # [261   56   24   15   46  254   24  824  146   26    5   13   30   45
+            #  60  184  347  222 1774    2   46]
+
+            # converter
+            # 264, 59, 24, 16, 51, 268, 24, 847, 149, 28, 6, 13, 30, 45, \
+            # 64, 192, 353, 229, 1848, 2, 48
 
             waymo_to_kitti_class_map = {
                 'UNKNOWN': 'DontCare',
@@ -432,74 +471,74 @@ class WaymoToKITTI(object):
             if not os.path.exists(LABEL_PATH + str(i)):
                 os.mkdir(LABEL_PATH + str(i))
 
-    def extract_intensity(self, frame, range_images, lidar_num):
-        """ extract the intensity from the original range image
-                :param frame: open dataset frame proto
-                :param frame_num: the current frame number
-                :param lidar_num: the number of current lidar
-                :return:
-                """
-        intensity_0 = np.array(range_images[lidar_num][0].data).reshape(-1, 4)
-        intensity_0 = intensity_0[:, 1]
-        intensity_1 = np.array(range_images[lidar_num][1].data).reshape(-1, 4)[:, 1]
-        return intensity_0, intensity_1
+    # def extract_intensity(self, frame, range_images, lidar_num):
+    #     """ extract the intensity from the original range image
+    #             :param frame: open dataset frame proto
+    #             :param frame_num: the current frame number
+    #             :param lidar_num: the number of current lidar
+    #             :return:
+    #             """
+    #     intensity_0 = np.array(range_images[lidar_num][0].data).reshape(-1, 4)
+    #     intensity_0 = intensity_0[:, 1]
+    #     intensity_1 = np.array(range_images[lidar_num][1].data).reshape(-1, 4)[:, 1]
+    #     return intensity_0, intensity_1
 
-    def image_show(self, data, name, layout, cmap=None):
-        """Show an image."""
-        plt.subplot(*layout)
-        plt.imshow(tf.image.decode_jpeg(data), cmap=cmap)
-        plt.title(name)
-        plt.grid(False)
-        plt.axis('off')
+    # def image_show(self, data, name, layout, cmap=None):
+    #     """Show an image."""
+    #     plt.subplot(*layout)
+    #     plt.imshow(tf.image.decode_jpeg(data), cmap=cmap)
+    #     plt.title(name)
+    #     plt.grid(False)
+    #     plt.axis('off')
 
-    def parse_range_image_and_camera_projection(self, frame):
-        """Parse range images and camera projections given a frame.
-        Args:
-           frame: open dataset frame proto
-        Returns:
-           range_images: A dict of {laser_name,
-             [range_image_first_return, range_image_second_return]}.
-           camera_projections: A dict of {laser_name,
-             [camera_projection_from_first_return,
-              camera_projection_from_second_return]}.
-          range_image_top_pose: range image pixel pose for top lidar.
-        """
-        self.__range_images = {}
-        # camera_projections = {}
-        # range_image_top_pose = None
-        for laser in frame.lasers:
-            if len(laser.ri_return1.range_image_compressed) > 0:
-                range_image_str_tensor = tf.io.decode_compressed(
-                    laser.ri_return1.range_image_compressed, 'ZLIB')
-                ri = open_dataset.MatrixFloat()
-                ri.ParseFromString(bytearray(range_image_str_tensor.numpy()))
-                self.__range_images[laser.name] = [ri]
-
-                if laser.name == open_dataset.LaserName.TOP:
-                    range_image_top_pose_str_tensor = tf.io.decode_compressed(
-                        laser.ri_return1.range_image_pose_compressed, 'ZLIB')
-                    range_image_top_pose = open_dataset.MatrixFloat()
-                    range_image_top_pose.ParseFromString(
-                        bytearray(range_image_top_pose_str_tensor.numpy()))
-
-                # camera_projection_str_tensor = tf.io.decode_compressed(
-                #     laser.ri_return1.camera_projection_compressed, 'ZLIB')
-                # cp = open_dataset.MatrixInt32()
-                # cp.ParseFromString(bytearray(camera_projection_str_tensor.numpy()))
-                # camera_projections[laser.name] = [cp]
-            if len(laser.ri_return2.range_image_compressed) > 0:
-                range_image_str_tensor = tf.io.decode_compressed(
-                    laser.ri_return2.range_image_compressed, 'ZLIB')
-                ri = open_dataset.MatrixFloat()
-                ri.ParseFromString(bytearray(range_image_str_tensor.numpy()))
-                self.__range_images[laser.name].append(ri)
-                #
-                # camera_projection_str_tensor = tf.io.decode_compressed(
-                #     laser.ri_return2.camera_projection_compressed, 'ZLIB')
-                # cp = open_dataset.MatrixInt32()
-                # cp.ParseFromString(bytearray(camera_projection_str_tensor.numpy()))
-                # camera_projections[laser.name].append(cp)
-        return self.__range_images, range_image_top_pose
+    # def parse_range_image_and_camera_projection(self, frame):
+    #     """Parse range images and camera projections given a frame.
+    #     Args:
+    #        frame: open dataset frame proto
+    #     Returns:
+    #        range_images: A dict of {laser_name,
+    #          [range_image_first_return, range_image_second_return]}.
+    #        camera_projections: A dict of {laser_name,
+    #          [camera_projection_from_first_return,
+    #           camera_projection_from_second_return]}.
+    #       range_image_top_pose: range image pixel pose for top lidar.
+    #     """
+    #     self.__range_images = {}
+    #     # camera_projections = {}
+    #     # range_image_top_pose = None
+    #     for laser in frame.lasers:
+    #         if len(laser.ri_return1.range_image_compressed) > 0:
+    #             range_image_str_tensor = tf.io.decode_compressed(
+    #                 laser.ri_return1.range_image_compressed, 'ZLIB')
+    #             ri = open_dataset.MatrixFloat()
+    #             ri.ParseFromString(bytearray(range_image_str_tensor.numpy()))
+    #             self.__range_images[laser.name] = [ri]
+    #
+    #             if laser.name == open_dataset.LaserName.TOP:
+    #                 range_image_top_pose_str_tensor = tf.io.decode_compressed(
+    #                     laser.ri_return1.range_image_pose_compressed, 'ZLIB')
+    #                 range_image_top_pose = open_dataset.MatrixFloat()
+    #                 range_image_top_pose.ParseFromString(
+    #                     bytearray(range_image_top_pose_str_tensor.numpy()))
+    #
+    #             # camera_projection_str_tensor = tf.io.decode_compressed(
+    #             #     laser.ri_return1.camera_projection_compressed, 'ZLIB')
+    #             # cp = open_dataset.MatrixInt32()
+    #             # cp.ParseFromString(bytearray(camera_projection_str_tensor.numpy()))
+    #             # camera_projections[laser.name] = [cp]
+    #         if len(laser.ri_return2.range_image_compressed) > 0:
+    #             range_image_str_tensor = tf.io.decode_compressed(
+    #                 laser.ri_return2.range_image_compressed, 'ZLIB')
+    #             ri = open_dataset.MatrixFloat()
+    #             ri.ParseFromString(bytearray(range_image_str_tensor.numpy()))
+    #             self.__range_images[laser.name].append(ri)
+    #             #
+    #             # camera_projection_str_tensor = tf.io.decode_compressed(
+    #             #     laser.ri_return2.camera_projection_compressed, 'ZLIB')
+    #             # cp = open_dataset.MatrixInt32()
+    #             # cp.ParseFromString(bytearray(camera_projection_str_tensor.numpy()))
+    #             # camera_projections[laser.name].append(cp)
+    #     return self.__range_images, range_image_top_pose
 
     def plot_range_image_helper(self, data, name, layout, vmin=0, vmax=1, cmap='gray'):
         """Plots range image.
@@ -542,7 +581,7 @@ class WaymoToKITTI(object):
         self.plot_range_image_helper(range_image_elongation.numpy(), 'elongation',
                                      [8, 1, layout_index_start + 2], vmax=1.5, cmap='gray')
 
-    def convert_range_image_to_point_cloud(self, frame, range_images, range_image_top_pose, ri_index=0):
+    def get_intensity(self, frame, range_images, ri_index=0):
         """Convert range images to point cloud.
         Args:
           frame: open dataset frame
@@ -554,72 +593,101 @@ class WaymoToKITTI(object):
           range_image_top_pose: range image pixel pose for top lidar.
           ri_index: 0 for the first return, 1 for the second return.
         Returns:
-          points: {[N, 3]} list of 3d lidar points of length 5 (number of lidars).
-          cp_points: {[N, 6]} list of camera projections of length 5
-            (number of lidars).
           intensity: {[N, 1]} list of intensity of length 5 (number of lidars).
         """
         calibrations = sorted(frame.context.laser_calibrations, key=lambda c: c.name)
-        # lasers = sorted(frame.lasers, key=lambda laser: laser.name)
-        points = []
-        # cp_points = []
         intensity = []
-
-        frame_pose = tf.convert_to_tensor(
-            np.reshape(np.array(frame.pose.transform), [4, 4]))
-        # [H, W, 6]
-        range_image_top_pose_tensor = tf.reshape(
-            tf.convert_to_tensor(range_image_top_pose.data),
-            range_image_top_pose.shape.dims)
-        # [H, W, 3, 3]
-        range_image_top_pose_tensor_rotation = transform_utils.get_rotation_matrix(
-            range_image_top_pose_tensor[..., 0], range_image_top_pose_tensor[..., 1],
-            range_image_top_pose_tensor[..., 2])
-        range_image_top_pose_tensor_translation = range_image_top_pose_tensor[..., 3:]
-        range_image_top_pose_tensor = transform_utils.get_transform(
-            range_image_top_pose_tensor_rotation,
-            range_image_top_pose_tensor_translation)
         for c in calibrations:
             range_image = range_images[c.name][ri_index]
-            if len(c.beam_inclinations) == 0:
-                beam_inclinations = range_image_utils.compute_inclination(
-                    tf.constant([c.beam_inclination_min, c.beam_inclination_max]),
-                    height=range_image.shape.dims[0])
-            else:
-                beam_inclinations = tf.constant(c.beam_inclinations)
-
-            beam_inclinations = tf.reverse(beam_inclinations, axis=[-1])
-            extrinsic = np.reshape(np.array(c.extrinsic.transform), [4, 4])
-
             range_image_tensor = tf.reshape(
                 tf.convert_to_tensor(range_image.data), range_image.shape.dims)
-            pixel_pose_local = None
-            frame_pose_local = None
-            if c.name == open_dataset.LaserName.TOP:
-                pixel_pose_local = range_image_top_pose_tensor
-                pixel_pose_local = tf.expand_dims(pixel_pose_local, axis=0)
-                frame_pose_local = tf.expand_dims(frame_pose, axis=0)
             range_image_mask = range_image_tensor[..., 0] > 0
-            range_image_cartesian = range_image_utils.extract_point_cloud_from_range_image(
-                tf.expand_dims(range_image_tensor[..., 0], axis=0),
-                tf.expand_dims(extrinsic, axis=0),
-                tf.expand_dims(tf.convert_to_tensor(beam_inclinations), axis=0),
-                pixel_pose=pixel_pose_local,
-                frame_pose=frame_pose_local)
-
-            range_image_cartesian = tf.squeeze(range_image_cartesian, axis=0)
-            points_tensor = tf.gather_nd(range_image_cartesian,
-                                         tf.where(range_image_mask))
             intensity_tensor = tf.gather_nd(range_image_tensor,
                                             tf.where(range_image_mask))
-            # cp = camera_projections[c.name][0]
-            # cp_tensor = tf.reshape(tf.convert_to_tensor(cp.data), cp.shape.dims)
-            # cp_points_tensor = tf.gather_nd(cp_tensor, tf.where(range_image_mask))
-            points.append(points_tensor.numpy())
-            # cp_points.append(cp_points_tensor.numpy())
             intensity.append(intensity_tensor.numpy()[:, 1])
 
-        return points, intensity
+        return intensity
+
+
+    # def convert_range_image_to_point_cloud(self, frame, range_images, range_image_top_pose, ri_index=0):
+    #     """Convert range images to point cloud.
+    #     Args:
+    #       frame: open dataset frame
+    #        range_images: A dict of {laser_name,
+    #          [range_image_first_return, range_image_second_return]}.
+    #        camera_projections: A dict of {laser_name,
+    #          [camera_projection_from_first_return,
+    #           camera_projection_from_second_return]}.
+    #       range_image_top_pose: range image pixel pose for top lidar.
+    #       ri_index: 0 for the first return, 1 for the second return.
+    #     Returns:
+    #       points: {[N, 3]} list of 3d lidar points of length 5 (number of lidars).
+    #       cp_points: {[N, 6]} list of camera projections of length 5
+    #         (number of lidars).
+    #       intensity: {[N, 1]} list of intensity of length 5 (number of lidars).
+    #     """
+    #     calibrations = sorted(frame.context.laser_calibrations, key=lambda c: c.name)
+    #     # lasers = sorted(frame.lasers, key=lambda laser: laser.name)
+    #     points = []
+    #     # cp_points = []
+    #     intensity = []
+    #
+    #     frame_pose = tf.convert_to_tensor(
+    #         np.reshape(np.array(frame.pose.transform), [4, 4]))
+    #     # [H, W, 6]
+    #     range_image_top_pose_tensor = tf.reshape(
+    #         tf.convert_to_tensor(range_image_top_pose.data),
+    #         range_image_top_pose.shape.dims)
+    #     # [H, W, 3, 3]
+    #     range_image_top_pose_tensor_rotation = transform_utils.get_rotation_matrix(
+    #         range_image_top_pose_tensor[..., 0], range_image_top_pose_tensor[..., 1],
+    #         range_image_top_pose_tensor[..., 2])
+    #     range_image_top_pose_tensor_translation = range_image_top_pose_tensor[..., 3:]
+    #     range_image_top_pose_tensor = transform_utils.get_transform(
+    #         range_image_top_pose_tensor_rotation,
+    #         range_image_top_pose_tensor_translation)
+    #     for c in calibrations:
+    #         range_image = range_images[c.name][ri_index]
+    #         if len(c.beam_inclinations) == 0:
+    #             beam_inclinations = range_image_utils.compute_inclination(
+    #                 tf.constant([c.beam_inclination_min, c.beam_inclination_max]),
+    #                 height=range_image.shape.dims[0])
+    #         else:
+    #             beam_inclinations = tf.constant(c.beam_inclinations)
+    #
+    #         beam_inclinations = tf.reverse(beam_inclinations, axis=[-1])
+    #         extrinsic = np.reshape(np.array(c.extrinsic.transform), [4, 4])
+    #
+    #         range_image_tensor = tf.reshape(
+    #             tf.convert_to_tensor(range_image.data), range_image.shape.dims)
+    #         pixel_pose_local = None
+    #         frame_pose_local = None
+    #         if c.name == open_dataset.LaserName.TOP:
+    #             pixel_pose_local = range_image_top_pose_tensor
+    #             pixel_pose_local = tf.expand_dims(pixel_pose_local, axis=0)
+    #             frame_pose_local = tf.expand_dims(frame_pose, axis=0)
+    #         range_image_mask = range_image_tensor[..., 0] > 0
+    #         range_image_cartesian = range_image_utils.extract_point_cloud_from_range_image(
+    #             tf.expand_dims(range_image_tensor[..., 0], axis=0),
+    #             tf.expand_dims(extrinsic, axis=0),
+    #             tf.expand_dims(tf.convert_to_tensor(beam_inclinations), axis=0),
+    #             pixel_pose=pixel_pose_local,
+    #             frame_pose=frame_pose_local)
+    #
+    #         range_image_cartesian = tf.squeeze(range_image_cartesian, axis=0)
+    #         points_tensor = tf.gather_nd(range_image_cartesian,
+    #                                      tf.where(range_image_mask))
+    #         intensity_tensor = tf.gather_nd(range_image_tensor,
+    #                                         tf.where(range_image_mask))
+    #         # cp = camera_projections[c.name][0]
+    #         # cp_tensor = tf.reshape(tf.convert_to_tensor(cp.data), cp.shape.dims)
+    #         # cp_points_tensor = tf.gather_nd(cp_tensor, tf.where(range_image_mask))
+    #         points.append(points_tensor.numpy())
+    #         # cp_points.append(cp_points_tensor.numpy())
+    #         intensity.append(intensity_tensor.numpy()[:, 1])
+    #
+    #     return points, intensity
+
 
     def rgba(self, r):
         """Generates a color based on range.
