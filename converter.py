@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import tqdm
 from multiprocessing import Pool
+from os.path import join
 
 from waymo_open_dataset.utils.frame_utils import parse_range_image_and_camera_projection, convert_range_image_to_point_cloud
 from waymo_open_dataset import dataset_pb2 as open_dataset
@@ -13,7 +14,7 @@ from waymo_open_dataset import dataset_pb2 as open_dataset
 
 ############################Config###########################################
 DATA_PATH = '/media/alex/Seagate Expansion Drive/waymo_open_dataset/domain_adaptation_training_labelled(partial)'
-KITTI_PATH = '/home/alex/github/waymo_to_kitti_converter/tools/pkl_debug/converted'
+KITTI_PATH = '/home/alex/github/waymo_to_kitti_converter/tools/pose'
 # number of processes
 NUM_PROC = 1
 # location filter, use this to convert your preferred location
@@ -23,13 +24,19 @@ LOCATION_NAME = ['location_sf']
 # file naming:
 # prefix(1 digit) + file idx(3 digits) + frame idx (3 digits)
 # e.g. 0123123.extension
-PREFIX = '4'  #
+PREFIX = '0'  #
+
+# Some 3D bounding boxes do not contain any points
+# filter_empty_3dbox, when set True, removes these boxes
+filter_empty_3dbox = True
+
 # do not change
 LABEL_PATH = KITTI_PATH + '/label_'
 LABEL_ALL_PATH = KITTI_PATH + '/label_all'
 IMAGE_PATH = KITTI_PATH + '/image_'
 CALIB_PATH = KITTI_PATH + '/calib'
 LIDAR_PATH = KITTI_PATH + '/velodyne'
+POSE_PATH = KITTI_PATH + '/pose'
 
 
 # Uncomment waymo classes for conversion
@@ -57,9 +64,6 @@ selected_waymo_classes = [
 # }
 
 
-# Some 3D bounding boxes do not contain any points
-# filter_empty_3dbox, when set True, removes these boxes
-filter_empty_3dbox = True
 
 # Some frames do not contain any ground truth bounding boxes
 # filter_empty_frame = False
@@ -109,6 +113,9 @@ class WaymoToKITTI(object):
 
             # parse label
             self.save_label(frame, file_num, frame_num)
+
+            # parse pose
+            self.save_pose(frame, file_num, frame_num)
 
             frame_num += 1
 
@@ -449,6 +456,18 @@ class WaymoToKITTI(object):
 
         # print(file_num, frame_num)
 
+    def save_pose(self, frame, file_num, frame_num):
+        """ Save self driving car (SDC)'s own pose
+
+        Note that SDC's own pose is not included in the regular training of KITTI dataset
+        KITTI raw dataset contains ego motion files but are not often used
+        Pose is important for algorithms that takes advantage of the temporal information
+
+        """
+
+        pose = np.array(frame.pose.transform).reshape(4,4)
+        np.savetxt(join(POSE_PATH, str(PREFIX) + str(file_num).zfill(3) + str(frame_num).zfill(3) + '.txt'), pose)
+
     def get_file_names(self):
         self.__file_names = []
         for i in os.listdir(DATA_PATH):
@@ -463,6 +482,8 @@ class WaymoToKITTI(object):
             os.mkdir(CALIB_PATH)
         if not os.path.exists(LIDAR_PATH):
             os.mkdir(LIDAR_PATH)
+        if not os.path.exists(POSE_PATH):
+            os.mkdir(POSE_PATH)
         if not os.path.exists(LABEL_ALL_PATH):
             os.mkdir(LABEL_ALL_PATH)
         for i in range(5):
@@ -540,46 +561,46 @@ class WaymoToKITTI(object):
     #             # camera_projections[laser.name].append(cp)
     #     return self.__range_images, range_image_top_pose
 
-    def plot_range_image_helper(self, data, name, layout, vmin=0, vmax=1, cmap='gray'):
-        """Plots range image.
-        Args:
-          data: range image data
-          name: the image title
-          layout: plt layout
-          vmin: minimum value of the passed data
-          vmax: maximum value of the passed data
-          cmap: color map
-        """
-        plt.subplot(*layout)
-        plt.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax)
-        plt.title(name)
-        plt.grid(False)
-        plt.axis('off')
-
-    def get_range_image(self, laser_name, return_index):
-        """Returns range image given a laser name and its return index."""
-        return self.__range_images[laser_name][return_index]
-
-    def show_range_image(self, range_image, layout_index_start=1):
-        """Shows range image.
-        Args:
-          range_image: the range image data from a given lidar of type MatrixFloat.
-          layout_index_start: layout offset
-        """
-        range_image_tensor = tf.convert_to_tensor(range_image.data)
-        range_image_tensor = tf.reshape(range_image_tensor, range_image.shape.dims)
-        lidar_image_mask = tf.greater_equal(range_image_tensor, 0)
-        range_image_tensor = tf.where(lidar_image_mask, range_image_tensor,
-                                      tf.ones_like(range_image_tensor) * 1e10)
-        range_image_range = range_image_tensor[..., 0]
-        range_image_intensity = range_image_tensor[..., 1]
-        range_image_elongation = range_image_tensor[..., 2]
-        self.plot_range_image_helper(range_image_range.numpy(), 'range',
-                                     [8, 1, layout_index_start], vmax=75, cmap='gray')
-        self.plot_range_image_helper(range_image_intensity.numpy(), 'intensity',
-                                     [8, 1, layout_index_start + 1], vmax=1.5, cmap='gray')
-        self.plot_range_image_helper(range_image_elongation.numpy(), 'elongation',
-                                     [8, 1, layout_index_start + 2], vmax=1.5, cmap='gray')
+    # def plot_range_image_helper(self, data, name, layout, vmin=0, vmax=1, cmap='gray'):
+    #     """Plots range image.
+    #     Args:
+    #       data: range image data
+    #       name: the image title
+    #       layout: plt layout
+    #       vmin: minimum value of the passed data
+    #       vmax: maximum value of the passed data
+    #       cmap: color map
+    #     """
+    #     plt.subplot(*layout)
+    #     plt.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax)
+    #     plt.title(name)
+    #     plt.grid(False)
+    #     plt.axis('off')
+    #
+    # def get_range_image(self, laser_name, return_index):
+    #     """Returns range image given a laser name and its return index."""
+    #     return self.__range_images[laser_name][return_index]
+    #
+    # def show_range_image(self, range_image, layout_index_start=1):
+    #     """Shows range image.
+    #     Args:
+    #       range_image: the range image data from a given lidar of type MatrixFloat.
+    #       layout_index_start: layout offset
+    #     """
+    #     range_image_tensor = tf.convert_to_tensor(range_image.data)
+    #     range_image_tensor = tf.reshape(range_image_tensor, range_image.shape.dims)
+    #     lidar_image_mask = tf.greater_equal(range_image_tensor, 0)
+    #     range_image_tensor = tf.where(lidar_image_mask, range_image_tensor,
+    #                                   tf.ones_like(range_image_tensor) * 1e10)
+    #     range_image_range = range_image_tensor[..., 0]
+    #     range_image_intensity = range_image_tensor[..., 1]
+    #     range_image_elongation = range_image_tensor[..., 2]
+    #     self.plot_range_image_helper(range_image_range.numpy(), 'range',
+    #                                  [8, 1, layout_index_start], vmax=75, cmap='gray')
+    #     self.plot_range_image_helper(range_image_intensity.numpy(), 'intensity',
+    #                                  [8, 1, layout_index_start + 1], vmax=1.5, cmap='gray')
+    #     self.plot_range_image_helper(range_image_elongation.numpy(), 'elongation',
+    #                                  [8, 1, layout_index_start + 2], vmax=1.5, cmap='gray')
 
     def get_intensity(self, frame, range_images, ri_index=0):
         """Convert range images to point cloud.
@@ -689,45 +710,45 @@ class WaymoToKITTI(object):
     #     return points, intensity
 
 
-    def rgba(self, r):
-        """Generates a color based on range.
-        Args:
-          r: the range value of a given point.
-        Returns:
-          The color for a given range
-        """
-        c = plt.get_cmap('jet')((r % 20.0) / 20.0)
-        c = list(c)
-        c[-1] = 0.5  # alpha
-        return c
-
-    def plot_image(self, camera_image):
-        """Plot a cmaera image."""
-        plt.figure(figsize=(20, 12))
-        plt.imshow(tf.image.decode_jpeg(camera_image.image))
-        plt.grid("off")
-
-    def plot_points_on_image(self, projected_points, camera_image, rgba_func, point_size=5.0):
-        """Plots points on a camera image.
-        Args:
-          projected_points: [N, 3] numpy array. The inner dims are
-            [camera_x, camera_y, range].
-          camera_image: jpeg encoded camera image.
-          rgba_func: a function that generates a color from a range value.
-          point_size: the point size.
-        """
-        self.plot_image(camera_image)
-
-        xs = []
-        ys = []
-        colors = []
-
-        for point in projected_points:
-            xs.append(point[0])  # width, col
-            ys.append(point[1])  # height, row
-            colors.append(rgba_func(point[2]))
-
-        plt.scatter(xs, ys, c=colors, s=point_size, edgecolors="none")
+    # def rgba(self, r):
+    #     """Generates a color based on range.
+    #     Args:
+    #       r: the range value of a given point.
+    #     Returns:
+    #       The color for a given range
+    #     """
+    #     c = plt.get_cmap('jet')((r % 20.0) / 20.0)
+    #     c = list(c)
+    #     c[-1] = 0.5  # alpha
+    #     return c
+    #
+    # def plot_image(self, camera_image):
+    #     """Plot a cmaera image."""
+    #     plt.figure(figsize=(20, 12))
+    #     plt.imshow(tf.image.decode_jpeg(camera_image.image))
+    #     plt.grid("off")
+    #
+    # def plot_points_on_image(self, projected_points, camera_image, rgba_func, point_size=5.0):
+    #     """Plots points on a camera image.
+    #     Args:
+    #       projected_points: [N, 3] numpy array. The inner dims are
+    #         [camera_x, camera_y, range].
+    #       camera_image: jpeg encoded camera image.
+    #       rgba_func: a function that generates a color from a range value.
+    #       point_size: the point size.
+    #     """
+    #     self.plot_image(camera_image)
+    #
+    #     xs = []
+    #     ys = []
+    #     colors = []
+    #
+    #     for point in projected_points:
+    #         xs.append(point[0])  # width, col
+    #         ys.append(point[1])  # height, row
+    #         colors.append(rgba_func(point[2]))
+    #
+    #     plt.scatter(xs, ys, c=colors, s=point_size, edgecolors="none")
 
 
 if __name__ == '__main__':
