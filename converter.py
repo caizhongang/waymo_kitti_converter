@@ -47,6 +47,10 @@ selected_waymo_locations = None
 class WaymoToKITTI(object):
 
     def __init__(self, load_dir, save_dir, prefix, num_proc):
+        # turn on eager execution for older tensorflow versions
+        if int(tf.__version__.split('.')[0]) < 2:
+            tf.enable_eager_execution()
+
         self.lidar_list = ['_FRONT', '_FRONT_RIGHT', '_FRONT_LEFT', '_SIDE_RIGHT', '_SIDE_LEFT']
         self.type_list = ['UNKNOWN', 'VEHICLE', 'PEDESTRIAN', 'SIGN', 'CYCLIST']
         self.waymo_to_kitti_class_map = {
@@ -74,21 +78,12 @@ class WaymoToKITTI(object):
         self.create_folder()
 
     def convert(self):
-        """ convert dataset from Waymo to KITTI
-        Args:
-        return:
-        """
-        # turn on eager execution for older tensorflow versions
-        if int(tf.__version__.split('.')[0]) < 2:
-            tf.enable_eager_execution()
-
         print("start converting ...")
         with Pool(self.num_proc) as p:
             r = list(tqdm.tqdm(p.imap(self.convert_one, range(len(self))), total=len(self)))
         print("\nfinished ...")
 
     def convert_one(self, file_idx):
-
         pathname = self.tfrecord_pathnames[file_idx]
         dataset = tf.data.TFRecordDataset(pathname, compression_type='')
         
