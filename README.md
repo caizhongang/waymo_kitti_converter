@@ -3,23 +3,22 @@
 This repository provides tools for:
 - [x] Converting Waymo Open Dataset(WOD)-format data to KITTI-format data
 - [x] Converting KITTI-format prediction results to WOD-format results
-- [x] Visualization for both formats, allowing prediction vs ground truth comparison
+- [x] Visualization for both formats
 
 The tools convert the following data types:
 - [x] Point clouds
 - [x] Images
 - [x] Bounding box labels
 - [x] Calibration
-- [x] Self driving car's poses <span style="color:red">[New!]</span>
+- [x] Self driving car's poses
 
-The tools has some additional features:
-- [x] Config file (coming soon)
+The tools have some additional features:
 - [x] Multiprocessing
 - [x] Progress bar
 
 ## Setup
 
-####Step 1. Create and use a new environment (taking anaconda for example)
+#### Step 1. Create and use a new environment (taking anaconda for example)
 
 Note: Python versions 3.6/3.7 are supported.
 ```
@@ -27,7 +26,7 @@ conda create -n waymo-kitti python=3.7
 conda activate waymo-kitti
 ```
 
-####Step 2. Install TensorFlow
+#### Step 2. Install TensorFlow
 
 Note: TensorFlow version 1.1.5/2.0.0/2.1.0 are supported.
 
@@ -37,7 +36,7 @@ For this repository, the cpu version is sufficient.
 pip3 install tensorflow 
 ```
 
-####Step 3. Install Waymo Open Dataset precompiled packages.
+#### Step 3. Install Waymo Open Dataset precompiled packages.
 
 Note: the following command assumes TensorFlow version 2.1.0. 
 You may modify the command according to your TensorFlow version. 
@@ -49,7 +48,7 @@ pip3 install --upgrade pip
 pip3 install waymo-open-dataset-tf-2-1-0==1.2.0 --user
 ```
 
-####Step 4. Install other packages
+#### Step 4. Install other packages
 
 ```
 pip3 install numpy opencv-python matplotlib tqdm
@@ -61,27 +60,184 @@ pip3 install open3d
  
 ## Convert WOD-format data to KITTI-format data
 
+#### Step 1. Download and decompress data
+
+Data can be downloaded from the [official website](https://waymo.com/open/download/).
+Note that domain adaptation data is not needed. 
+
+Decompress the zip files into different directories.
+Each directory should contain tfrecords.
+Example:
 ```
-python converter.py
+waymo_open_dataset
+├── training
+├── validation
+├── testing
+```
+
+
+#### Step 2. Run the conversion tool
+
+```
+python converter.py <load_dir> <save_dir> [--prefix prefix] [--num_proc num_proc]
+```
+- load_dir: directory to load Waymo Open Dataset tfrecords
+- save_dir: directory to save converted KITTI-format data
+- (optional) prefix: prefix to be added to converted file names
+- (optional) num_proc: number of processes to spawn
+
+The reason for having a prefix is that KITTI format does not have a separate val set.
+Hence, training set and validation set are merged into one directory.
+To differentiate data from these two sets, the files have different prefixes.
+In addition, WOD has some labelled data for domain adaptation task.
+They can be added to the training directory with different prefixes as well.
+
+Example:
+```
+python converter.py waymo_open_dataset/training waymo_open_dataset_kitti/training --prefix 0 --num_proc 8
+python converter.py waymo_open_dataset/validation waymo_open_dataset_kitti/training --prefix 1 --num_proc 8
+python converter.py waymo_open_dataset/testing waymo_open_dataset_kitti/testing --prefix 2 --num_proc 8
+```
+Note: both training and validation sets are saved in the same directory (waymo_open_dataset_kitti/training).
+Hence, it is necessary to give them different prefix to avoid overwriting.
+
+As the WOD is huge, the process can take very long. 
+It is recommended to use more processes as long as there are enough CPU cores.
+
+#### More on the converted data
+
+The converted data should have the following file structure:
+```
+save_dir
+├── calib
+├── image_0
+├── image_1
+├── image_2
+├── image_3
+├── image_4
+├── label_0
+├── label_1
+├── label_2
+├── label_3
+├── label_4
+├── label_all
+├── pose
+├── velodyne
+```
+Important Notes: 
+- KITTI only annotates 3D bounding boxes visible in the front camera,
+whereas WOD annotates 3D bounding boxes both within and out of the field of views of all 5 cameras
+- KITTI's front camera has a index 2, whereas the WOD's front camera has a index 0
+- The calibration files are for the front camera
+- label_x only contains 3D bounding boxes visible in camera idx x.
+- label_all contains all 3D bounding boxes, even those out of the field of views of all cameras.
+- calib contains calibration files for the front camera only at the moment
+- pose file is not included in the regular KITTI set. It contains self driving car's pose, 
+in the form of a transformation matrix (4x4) from the vehicle frame to the global frame
+
+To read a pose file:
+```python3
+import numpy as np
+pose = np.loadtxt(<pathname>, dtype=np.float32)
+```
+
+The label files in label_x (x in {0,1,2,3}) are similar to the regular KITTI label:
+
+```
+#Values    Name      Description
+----------------------------------------------------------------------------
+   1    type         Describes the type of object: 'Car', 'Pedestrian', 'Cyclist'
+   1    truncated    Always 0
+   1    occluded     Always 0
+   1    alpha        Always -10
+   4    bbox         2D bounding box of object in the image (0-based index):
+                     contains left, top, right, bottom pixel coordinates
+   3    dimensions   3D object dimensions: height, width, length (in meters)
+   3    location     3D object location x,y,z in camera coordinates (in meters)
+   1    rotation_y   Rotation ry around Y-axis in camera coordinates [-pi..pi]
+```
+
+The label files in label_all has the following format:
+```
+#Values    Name      Description
+----------------------------------------------------------------------------
+   1    type         Describes the type of object: 'Car', 'Pedestrian', 'Cyclist'
+   1    truncated    Always 0
+   1    occluded     Always 0
+   1    alpha        Always -10
+   4    bbox         2D bounding box of object in the image (0-based index):
+                     contains left, top, right, bottom pixel coordinates
+   3    dimensions   3D object dimensions: height, width, length (in meters)
+   3    location     3D object location x,y,z in camera coordinates (in meters)
+   1    rotation_y   Rotation ry around Y-axis in camera coordinates [-pi..pi]
+   1    cam_idx	     The index of the camera it is visible. Set to 0 if not visible
+                     in any of the cameras   
 ```
 
 ## Convert KITTI-format results to WOD-format results
-It is assumed that the KITTI-format results has the following format:
 
+#### Generation of the prediction results
+It is assumed that the user's model generates prediction in the KITTI-format .txt files.
 
-Suppose your codebase generates prediction in the KITTI-format,
-this tool converts these results to Waymo-format,
-and wraps it into a single .bin.
+#### Run the conversion tool
 
 ```
-python prediction_kitti_to_waymo.py
+python prediction_kitti_to_waymo.py <kitti_results_load_dir> <waymo_tfrecords_load_dir> \
+                                    <waymo_results_save_dir> <waymo_results_comb_save_pathname> \
+                                    [--prefix prefix] [--num_proc num_proc]
 ```
+- kitti_results_load_dir: directory to load KITTI-format results
+- waymo_tfrecords_load_dir: directory to load corresponding Waymo Open Dataset tfrecords
+- waymo_results_save_dir: directory to save temporary output files
+- waymo_results_comb_save_pathname: pathname to save the single output file
+- (optional) prefix: prefix to be added to converted file names
+- (optional) num_proc: number of processes to spawn
+
+Example:
+```
+python prediction_kitti_to_waymo.py prediction/  waymo_open_dataset/testing \
+                                    temp/  output.bin \
+                                    --prefix 2 --num_proc 8
+```
+Note: this example shows how to convert the eval results on the test set.
+For the validation set, waymo_tfrecords_load_dir must be modified accordingly.
+The prefix must match the one used for Waymo-to-KITTI data conversion.
+It is important that the tfrecords in the directory are not modified (added, deleted etc)
+
+#### Evaluate the results
+
+The output file of the conversion tool is a single .bin.
+Waymo Open Dataset provides methods for creating submission (create_submission) or
+local evaluation (compute_detection_metrics_main). See the [official guide](https://github.com/waymo-research/waymo-open-dataset/blob/master/docs/quick_start.md) for details.
+
 
 ## Others
 
 Additional tools can be found in tools/
 - Visualization tool for KITTI-format predictions against WOD-format ground truths 
 
+### KITTI
+
+```
+#Values    Name      Description
+----------------------------------------------------------------------------
+   1    type         Describes the type of object: 'Car', 'Van', 'Truck',
+                     'Pedestrian', 'Person_sitting', 'Cyclist', 'Tram',
+                     'Misc' or 'DontCare'
+   1    truncated    Float from 0 (non-truncated) to 1 (truncated), where
+                     truncated refers to the object leaving image boundaries
+   1    occluded     Integer (0,1,2,3) indicating occlusion state:
+                     0 = fully visible, 1 = partly occluded
+                     2 = largely occluded, 3 = unknown
+   1    alpha        Observation angle of object, ranging [-pi..pi]
+   4    bbox         2D bounding box of object in the image (0-based index):
+                     contains left, top, right, bottom pixel coordinates
+   3    dimensions   3D object dimensions: height, width, length (in meters)
+   3    location     3D object location x,y,z in camera coordinates (in meters)
+   1    rotation_y   Rotation ry around Y-axis in camera coordinates [-pi..pi]
+   1    score	     Only for results: Float, indicating confidence in
+                     detection, needed for p/r curves, higher is better.   
+```
 
 ## References
 
