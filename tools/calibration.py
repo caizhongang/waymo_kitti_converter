@@ -31,9 +31,9 @@ class Calibration(object):
         self.R0 = calib['R0']  # 3 x 3
         self.V2C = calib['Tr_velo2cam']  # 3 x 4
 
-        print('P2', self.P2)
-        print('R0', self.R0)
-        print('V2C', self.V2C)
+        # print('P2', self.P2)
+        # print('R0', self.R0)
+        # print('V2C', self.V2C)
 
         # Camera intrinsics and extrinsics
         self.cu = self.P2[0, 2]

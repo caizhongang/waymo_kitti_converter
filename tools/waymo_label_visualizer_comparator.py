@@ -21,8 +21,12 @@ from waymo_open_dataset.protos import metrics_pb2
 from waymo_open_dataset import dataset_pb2 as open_dataset
 
 
-all_dt_pathname = '/home/alex/github/waymo_to_kitti_converter/submission/20200423_pointpillar_waymo_val/20200423_pointpillar_waymo_val.bin'
+all_dt_pathname = '/home/alex/github/waymo_to_kitti_converter/submission/20200513/PartA2_waymo_nosign_40_mini_all_m1    40.bin'
 gt_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo/validation/segment-1024360143612057520_3580_000_3600_000_with_camera_labels.tfrecord'
+# gt_pathname = '/media/alex/Seagate Expansion Drive/waymo_open_dataset/validation(partial)/segment-10837554759555844344_6525_000_6545_000_with_camera_labels.tfrecord'
+
+# all_dt_pathname = '/home/alex/github/waymo_to_kitti_converter/submission/20200430_pointpillar_waymo_8_16_z4_test/20200430_pointpillar_waymo_8_16_z4_test.bin'
+# gt_pathname = '/media/alex/Seagate Expansion Drive/waymo_open_dataset/testing(partial)/segment-10084636266401282188_1120_000_1140_000_with_camera_labels.tfrecord'
 
 
 def parse_range_image_and_camera_projection(frame):
