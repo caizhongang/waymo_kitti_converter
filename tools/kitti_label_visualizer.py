@@ -4,11 +4,11 @@ import kitti_util as utils
 import numpy as np
 from calibration import Calibration
 from objects3d_utils import get_objects_from_label
+from scipy.spatial import Delaunay
+import scipy
+from waymo_open_dataset.utils.box_utils import compute_num_points_in_box_3d
+import tensorflow as tf
 
-# kitti
-# pc_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/kitti/velodyne/000002.bin'
-# label_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/kitti//label_2/000002.txt'
-# calib_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/kitti/calib/000002.txt'
 
 # kitti
 # pc_pathname = '/media/alex/Seagate Expansion Drive/kitti/velodyne/training/velodyne/002394.bin'
@@ -16,13 +16,13 @@ from objects3d_utils import get_objects_from_label
 # calib_pathname = '/media/alex/Seagate Expansion Drive/kitti/calib/training/calib/002394.txt'
 
 # use my own tool
-pc_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/velodyne/00000-00000.bin'
-label_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/label_all/00000-00000.txt'
-calib_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/calib/00000-00000.txt'
+# pc_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/velodyne/00000-00000.bin'
+# label_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/label_all/00000-00000.txt'
+# calib_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/calib/00000-00000.txt'
 
-# pc_pathname = '/media/alex/Seagate Expansion Drive/waymo_open_dataset_kitti/training(partial)/velodyne/00000-00000.bin'
-# label_pathname = '/media/alex/Seagate Expansion Drive/waymo_open_dataset_kitti/training(partial)/label_all/00000-00000.txt'
-# calib_pathname = '/media/alex/Seagate Expansion Drive/waymo_open_dataset_kitti/training(partial)/calib/00000-00000.txt'
+pc_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/pkl_debug/converted/velodyne/4000000.bin'
+label_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/pkl_debug/converted/label_all/4000000.txt'
+calib_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/pkl_debug/converted/calib/4000000.txt'
 
 # pc_range = [0, -40, -3.0, 70.4, 40, 3.0]
 pc_range = None
@@ -44,6 +44,22 @@ pc_range = None
 #
 #     return data
 
+
+def in_hull(p, hull):
+    """
+    :param p: (N, K) test points
+    :param hull: (M, K) M corners of a box
+    :return (N) bool
+    """
+    try:
+        if not isinstance(hull, Delaunay):
+            hull = Delaunay(hull)
+        flag = hull.find_simplex(p) >= 0
+    except scipy.spatial.qhull.QhullError:
+        print('Warning: not a hull %s' % str(hull))
+        flag = np.zeros(p.shape[0], dtype=np.bool)
+
+    return flag
 
 
 def corners_to_lines(qs):
@@ -96,23 +112,23 @@ def boxes3d_to_corners3d_lidar(boxes3d, bottom_center=True):
     ry = boxes3d[:, 6]
     zeros, ones = np.zeros(ry.size, dtype=np.float32), np.ones(ry.size, dtype=np.float32)
 
-    print('ry\n', ry)
+    # print('ry\n', ry)
 
     rot_list = np.array([[np.cos(ry), -np.sin(ry), zeros],
                          [np.sin(ry), np.cos(ry),  zeros],
                          [zeros,      zeros,        ones]])  # (3, 3, N)
     R_list = np.transpose(rot_list, (2, 0, 1))  # (N, 3, 3)
 
-    print('Rot\n', R_list[-1])
+    # print('Rot\n', R_list[-1])
 
     temp_corners = np.concatenate((x_corners.reshape(-1, 8, 1), y_corners.reshape(-1, 8, 1),
                                    z_corners.reshape(-1, 8, 1)), axis=2)  # (N, 8, 3)
 
-    print('corners', temp_corners[-1])
+    # print('corners', temp_corners[-1])
 
     rotated_corners = np.matmul(temp_corners, R_list)  # (N, 8, 3)
 
-    print('rotated_corners', rotated_corners[-1])
+    # print('rotated_corners', rotated_corners[-1])
 
     x_corners, y_corners, z_corners = rotated_corners[:, :, 0], rotated_corners[:, :, 1], rotated_corners[:, :, 2]
 
@@ -126,11 +142,10 @@ def boxes3d_to_corners3d_lidar(boxes3d, bottom_center=True):
 
     corners = np.concatenate((x.reshape(-1, 8, 1), y.reshape(-1, 8, 1), z.reshape(-1, 8, 1)), axis=2)
 
-    print('shifted_corners\n', corners[-1])
+    # print('shifted_corners\n', corners[-1])
     # print(corners.shape)
 
     return corners.astype(np.float32)
-
 
 
 def transform_pc(pc, R0, V2C):
@@ -154,13 +169,13 @@ def filter_range(pc, pc_range):
     cond5 = zmin < pc[:, 2]
     cond6 = pc[:, 2] < zmax
 
-    print(cond1, cond2, cond3, cond4, cond5, cond6)
+    # print(cond1, cond2, cond3, cond4, cond5, cond6)
 
     s = (cond1.astype(np.int) + cond2.astype(np.int) + cond3.astype(np.int) + cond4.astype(np.int) + cond5.astype(np.int) + cond6.astype(np.int))
-    print(s)
+    # print(s)
 
     select = s == 6
-    print(sum(select), len(select))
+    # print(sum(select), len(select))
     return pc[select]
 
 
@@ -169,14 +184,14 @@ def main():
 
     # pc = pk_utils.load_velo_scan(pc_pathname)
     pc = np.fromfile(pc_pathname, dtype=np.float32).reshape(-1, 4)
-    print('pc', pc)
+    # print('pc', pc)
 
     if pc_range is not None:
         pc = filter_range(pc, pc_range)
 
-    print('pc, just loaded', pc.shape)
+    # print('pc, just loaded', pc.shape)
     pc = pc[:, :3]
-    print('pc, after slicing', pc.shape)
+    # print('pc, after slicing', pc.shape)
 
     # objs = utils.read_label(label_pathname)
     # calib = pk_utils.read_calib_file(calib_pathname)
@@ -207,7 +222,10 @@ def main():
     l, h, w = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
     gt_boxes_lidar = np.concatenate([loc_lidar, w, l, h, rots[..., np.newaxis]], axis=1)
 
+    print(gt_boxes_lidar)
+
     corners = boxes3d_to_corners3d_lidar(gt_boxes_lidar)
+
     # corners_lidar = calib.rect_to_lidar(corners)
 
     # bboxes3d = []
@@ -215,13 +233,29 @@ def main():
     #     bbox2d, bbox3d = utils.compute_box_3d(o, P0)
     #     bboxes3d.append(bbox3d)
 
+    num_points_in_gt = -np.ones(len(corners), dtype=np.int32)
+
     bboxes3d = []
     for i in range(corners.shape[0]):
         bboxes3d.append(corners[i])
+        flag = in_hull(pc, corners[i])
+        num_points_in_gt[i] = flag.sum()
+
+    # gt_boxes_lidar_temp = gt_boxes_lidar.copy()
+    # # print('bef\n', gt_boxes_lidar_temp[:, 6])
+    # # gt_boxes_lidar_temp[:, 6] = gt_boxes_lidar_temp[:, 6] - np.pi / 2
+    # # print('aft\n', gt_boxes_lidar_temp[:, 6])
+    # num_points_in_gt_waymo = compute_num_points_in_box_3d(tf.convert_to_tensor(pc.astype(np.float32), dtype=tf.float32), tf.convert_to_tensor(gt_boxes_lidar_temp.astype(np.float32), dtype=tf.float32))
+    #
+    # print(pc, gt_boxes_lidar)
+    print('PCDet:', num_points_in_gt)
+
+    # print(tf.convert_to_tensor(pc.astype(np.float32), dtype=tf.float32), tf.convert_to_tensor(gt_boxes_lidar_temp.astype(np.float32), dtype=tf.float32))
+    # print('Waymo:', num_points_in_gt_waymo.numpy())
 
     # draw
     pcd = o3d.geometry.PointCloud()
-    print(pc)
+    # print(pc)
     pcd.points = o3d.utility.Vector3dVector(pc)
 
     axis = o3d.geometry.TriangleMesh.create_coordinate_frame(
