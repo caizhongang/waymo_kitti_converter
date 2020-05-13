@@ -244,10 +244,10 @@ class KITTI2Waymo(object):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('kitti_results_load_dir', help='Directory to load Waymo Open Dataset tfrecords')
-    parser.add_argument('waymo_tfrecords_load_dir', help='Directory to save converted KITTI-format data')
-    parser.add_argument('waymo_results_save_dir', default='', help='Prefix to be added to converted file names')
-    parser.add_argument('waymo_results_comb_save_pathname', default=1, help='Number of processes to spawn')
+    parser.add_argument('kitti_results_load_dir', help='Directory to load KITTI-format results')
+    parser.add_argument('waymo_tfrecords_load_dir', help='Directory to load corresponding Waymo Open Dataset tfrecords')
+    parser.add_argument('waymo_results_save_dir', help='Directory to save temporary output files')
+    parser.add_argument('waymo_results_comb_save_pathname', help='Pathname to save the single output file')
     parser.add_argument('--prefix', default='', help='Prefix to be added to converted file names')
     parser.add_argument('--num_proc', default=1, help='Number of processes to spawn')
     args = parser.parse_args()
