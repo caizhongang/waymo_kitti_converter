@@ -98,11 +98,9 @@ python converter.py waymo_open_dataset/training waymo_open_dataset_kitti/trainin
 python converter.py waymo_open_dataset/validation waymo_open_dataset_kitti/training --prefix 1 --num_proc 8
 python converter.py waymo_open_dataset/testing waymo_open_dataset_kitti/testing --prefix 2 --num_proc 8
 ```
-Note: both training and validation sets are saved in the same directory (waymo_open_dataset_kitti/training).
-Hence, it is necessary to give them different prefix to avoid overwriting.
-
-As the WOD is huge, the process can take very long. 
-It is recommended to use more processes as long as there are enough CPU cores.
+Note: 
+- if both training and validation sets are saved in the same directory (waymo_open_dataset_kitti/training), it is necessary to give them different prefix to avoid overwriting.
+- as the WOD is huge, the process can take very long; it is thus recommended to use more processes as long as there are enough CPU cores.
 
 #### More on the converted data
 
@@ -157,7 +155,7 @@ The label files in label_x (x in {0,1,2,3}) are similar to the regular KITTI lab
    1    rotation_y   Rotation ry around Y-axis in camera coordinates [-pi..pi]
 ```
 
-The label files in label_all has the following format:
+The label files in label_all have the following format:
 ```
 #Values    Name      Description
 ----------------------------------------------------------------------------
@@ -170,14 +168,14 @@ The label files in label_all has the following format:
    3    dimensions   3D object dimensions: height, width, length (in meters)
    3    location     3D object location x,y,z in camera coordinates (in meters)
    1    rotation_y   Rotation ry around Y-axis in camera coordinates [-pi..pi]
-   1    cam_idx	     The index of the camera it is visible. Set to 0 if not visible
-                     in any of the cameras   
+   1    cam_idx	     The index of the camera in which the 3D bounding box is visible. 
+                     Set to 0 if not visible in any cameras   
 ```
 
 ## Convert KITTI-format results to WOD-format results
 
 #### Generation of the prediction results
-It is assumed that the user's model generates prediction in the KITTI-format .txt files.
+It is assumed that the user's model generates prediction results .txt files in the KITTI format.
 
 #### Run the conversion tool
 
@@ -199,10 +197,11 @@ python prediction_kitti_to_waymo.py prediction/  waymo_open_dataset/testing \
                                     temp/  output.bin \
                                     --prefix 2 --num_proc 8
 ```
-Note: this example shows how to convert the eval results on the test set.
+Note: 
+- this example shows how to convert the prediction results on the test set.
 For the validation set, waymo_tfrecords_load_dir must be modified accordingly.
-The prefix must match the one used for Waymo-to-KITTI data conversion.
-It is important that the tfrecords in the directory are not modified (added, deleted etc)
+- the prefix must match the one used for Waymo-to-KITTI data conversion.
+- it is important that the tfrecords in the directory are not modified (added, deleted etc)
 
 #### Evaluate the results
 
@@ -210,34 +209,6 @@ The output file of the conversion tool is a single .bin.
 Waymo Open Dataset provides methods for creating submission (create_submission) or
 local evaluation (compute_detection_metrics_main). See the [official guide](https://github.com/waymo-research/waymo-open-dataset/blob/master/docs/quick_start.md) for details.
 
-
-## Others
-
-Additional tools can be found in tools/
-- Visualization tool for KITTI-format predictions against WOD-format ground truths 
-
-### KITTI
-
-```
-#Values    Name      Description
-----------------------------------------------------------------------------
-   1    type         Describes the type of object: 'Car', 'Van', 'Truck',
-                     'Pedestrian', 'Person_sitting', 'Cyclist', 'Tram',
-                     'Misc' or 'DontCare'
-   1    truncated    Float from 0 (non-truncated) to 1 (truncated), where
-                     truncated refers to the object leaving image boundaries
-   1    occluded     Integer (0,1,2,3) indicating occlusion state:
-                     0 = fully visible, 1 = partly occluded
-                     2 = largely occluded, 3 = unknown
-   1    alpha        Observation angle of object, ranging [-pi..pi]
-   4    bbox         2D bounding box of object in the image (0-based index):
-                     contains left, top, right, bottom pixel coordinates
-   3    dimensions   3D object dimensions: height, width, length (in meters)
-   3    location     3D object location x,y,z in camera coordinates (in meters)
-   1    rotation_y   Rotation ry around Y-axis in camera coordinates [-pi..pi]
-   1    score	     Only for results: Float, indicating confidence in
-                     detection, needed for p/r curves, higher is better.   
-```
 
 ## References
 
