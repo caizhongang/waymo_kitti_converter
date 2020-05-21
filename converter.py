@@ -22,7 +22,7 @@ from waymo_open_dataset.utils import transform_utils
 # 3dbox: 3D bounding box
 
 # Some 3D bounding boxes do not contain any points
-# This switch, when set False, filters these boxes
+# This switch, when set True, filters these boxes
 # It is safe to filter these boxes because they are not counted towards evaluation anyway
 filter_empty_3dboxes = False
 
@@ -97,6 +97,7 @@ class WaymoToKITTI(object):
         dataset = tf.data.TFRecordDataset(pathname, compression_type='')
         
         for frame_idx, data in enumerate(dataset):
+
             frame = open_dataset.Frame()
             frame.ParseFromString(bytearray(data.numpy()))
             if selected_waymo_locations is not None and frame.context.stats.location not in selected_waymo_locations:
@@ -243,25 +244,23 @@ class WaymoToKITTI(object):
                 :return:
                 """
         range_images, camera_projections, range_image_top_pose = parse_range_image_and_camera_projection(frame)
-        points_0, cp_points_0 = self.convert_range_image_to_point_cloud(
+        points_0, cp_points_0, intensity_0 = self.convert_range_image_to_point_cloud(
             frame,
             range_images,
             camera_projections,
             range_image_top_pose,
             ri_index=0
         )
-        intensity_0 = self.get_intensity(frame, range_images, ri_index=0)
         points_0 = np.concatenate(points_0, axis=0)
         intensity_0 = np.concatenate(intensity_0, axis=0)
 
-        points_1, cp_points_1 = self.convert_range_image_to_point_cloud(
+        points_1, cp_points_1, intensity_1 = self.convert_range_image_to_point_cloud(
             frame,
             range_images,
             camera_projections,
             range_image_top_pose,
             ri_index=1
         )
-        intensity_1 = self.get_intensity(frame, range_images, ri_index=1)
         points_1 = np.concatenate(points_1, axis=0)
         intensity_1 = np.concatenate(intensity_1, axis=0)
 
@@ -455,7 +454,8 @@ class WaymoToKITTI(object):
                 if not isdir(d + str(i)):
                     os.makedirs(d + str(i))
 
-    def convert_range_image_to_point_cloud(frame,
+    def convert_range_image_to_point_cloud(self,
+                                           frame,
                                            range_images,
                                            camera_projections,
                                            range_image_top_pose,
@@ -478,6 +478,7 @@ class WaymoToKITTI(object):
         calibrations = sorted(frame.context.laser_calibrations, key=lambda c: c.name)
         points = []
         cp_points = []
+        intensity = []
 
         frame_pose = tf.convert_to_tensor(
             value=np.reshape(np.array(frame.pose.transform), [4, 4]))
@@ -517,7 +518,8 @@ class WaymoToKITTI(object):
 
             # No Label Zone
             if filter_no_label_zone_points:
-                nlz_mask = range_image_tensor[..., 0] != 1.0  # 1.0: in NLZ
+                nlz_mask = range_image_tensor[..., 3] != 1.0  # 1.0: in NLZ
+                # print(range_image_tensor[range_image_tensor[..., 3] == 1.0])
                 range_image_mask = range_image_mask & nlz_mask
 
             range_image_cartesian = range_image_utils.extract_point_cloud_from_range_image(
@@ -538,35 +540,39 @@ class WaymoToKITTI(object):
             points.append(points_tensor.numpy())
             cp_points.append(cp_points_tensor.numpy())
 
-        return points, cp_points
-
-
-    def get_intensity(self, frame, range_images, ri_index=0):
-        """Convert range images to point cloud.
-        Args:
-          frame: open dataset frame
-           range_images: A dict of {laser_name,
-             [range_image_first_return, range_image_second_return]}.
-           camera_projections: A dict of {laser_name,
-             [camera_projection_from_first_return,
-              camera_projection_from_second_return]}.
-          range_image_top_pose: range image pixel pose for top lidar.
-          ri_index: 0 for the first return, 1 for the second return.
-        Returns:
-          intensity: {[N, 1]} list of intensity of length 5 (number of lidars).
-        """
-        calibrations = sorted(frame.context.laser_calibrations, key=lambda c: c.name)
-        intensity = []
-        for c in calibrations:
-            range_image = range_images[c.name][ri_index]
-            range_image_tensor = tf.reshape(
-                tf.convert_to_tensor(range_image.data), range_image.shape.dims)
-            range_image_mask = range_image_tensor[..., 0] > 0
             intensity_tensor = tf.gather_nd(range_image_tensor,
                                             tf.where(range_image_mask))
             intensity.append(intensity_tensor.numpy()[:, 1])
 
-        return intensity
+        return points, cp_points, intensity
+
+
+    # def get_intensity(self, frame, range_images, ri_index=0):
+    #     """Convert range images to point cloud.
+    #     Args:
+    #       frame: open dataset frame
+    #        range_images: A dict of {laser_name,
+    #          [range_image_first_return, range_image_second_return]}.
+    #        camera_projections: A dict of {laser_name,
+    #          [camera_projection_from_first_return,
+    #           camera_projection_from_second_return]}.
+    #       range_image_top_pose: range image pixel pose for top lidar.
+    #       ri_index: 0 for the first return, 1 for the second return.
+    #     Returns:
+    #       intensity: {[N, 1]} list of intensity of length 5 (number of lidars).
+    #     """
+    #     calibrations = sorted(frame.context.laser_calibrations, key=lambda c: c.name)
+    #     intensity = []
+    #     for c in calibrations:
+    #         range_image = range_images[c.name][ri_index]
+    #         range_image_tensor = tf.reshape(
+    #             tf.convert_to_tensor(range_image.data), range_image.shape.dims)
+    #         range_image_mask = range_image_tensor[..., 0] > 0
+    #         intensity_tensor = tf.gather_nd(range_image_tensor,
+    #                                         tf.where(range_image_mask))
+    #         intensity.append(intensity_tensor.numpy()[:, 1])
+    #
+    #     return intensity
 
     def cart_to_homo(self, mat):
         ret = np.eye(4)
