@@ -37,7 +37,7 @@ Note: TensorFlow version 1.1.5/2.0.0/2.1.0 are supported.
 The following command install the newest version 2.1.0. 
 For this repository, the cpu version is sufficient.
 ```
-pip3 install tensorflow 
+pip3 install tensorflow==2.1.0 
 ```
 
 #### Step 3. Install Waymo Open Dataset precompiled packages.
@@ -55,7 +55,7 @@ pip3 install waymo-open-dataset-tf-2-1-0==1.2.0 --user
 #### Step 4. Install other packages
 
 ```
-pip3 install numpy opencv-python matplotlib tqdm
+pip3 install opencv-python matplotlib tqdm
 ```
 The following optional package is needed for the 3D visualization tools in tools/:
 ```
@@ -81,7 +81,6 @@ waymo_open_dataset
 
 
 #### Step 2. Run the conversion tool
-
 ```
 python converter.py <load_dir> <save_dir> [--prefix prefix] [--num_proc num_proc]
 ```
@@ -89,6 +88,11 @@ python converter.py <load_dir> <save_dir> [--prefix prefix] [--num_proc num_proc
 - save_dir: directory to save converted KITTI-format data
 - (optional) prefix: prefix to be added to converted file names
 - (optional) num_proc: number of processes to spawn
+
+**Important Notes:**
+- **tensorflow warnings that appear at the start can be ignored**
+- **the progress bar is shown only after the first file is processed**
+- **time for conversion (single process) ~40 mins / tfrecord (Intel Xeon Gold 6126)**
 
 The reason for having a prefix is that KITTI format does not have a separate val set.
 Hence, training set and validation set are merged into one directory.
