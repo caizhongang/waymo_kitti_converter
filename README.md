@@ -1,4 +1,4 @@
-# waymo_kitti_converter
+# Waymo-KITTI Converter
 
 This repository provides tools for:
 - [x] Converting Waymo Open Dataset(WOD)-format data to KITTI-format data
@@ -15,6 +15,10 @@ The tools convert the following data types:
 The tools have some additional features:
 - [x] Multiprocessing
 - [x] Progress bar
+
+## Technical Report
+
+More implementation details are included in our [technical report](https://arxiv.org/abs/2006.16796)
 
 ## Setup
 
