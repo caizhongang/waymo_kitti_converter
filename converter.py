@@ -426,7 +426,11 @@ class WaymoToKITTI(object):
                                                                                    round(y, 2),
                                                                                    round(z, 2),
                                                                                    round(rotation_y, 2))
-            line_all = line[:-1] + ' ' + name + ' ' + track_id + '\n'  # TODO: temp solution to add the track id
+            if save_track_id:
+                line_all = line[:-1] + ' ' + name + ' ' + track_id + '\n'
+            else:
+                line_all = line[:-1] + ' ' + name + '\n'
+
             # store the label
             fp_label = open(self.label_save_dir + name + '/' + self.prefix + str(file_idx).zfill(3) + str(frame_idx).zfill(3) + '.txt', 'a')
             fp_label.write(line)
