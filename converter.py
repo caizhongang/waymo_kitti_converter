@@ -48,6 +48,8 @@ selected_waymo_classes = [
 # Available options: location_sf (main dataset)
 selected_waymo_locations = None
 
+# Save track id
+save_track_id = True
 
 # DATA_PATH = '/media/alex/Seagate Expansion Drive/waymo_open_dataset/domain_adaptation_training_labelled(partial)'
 # KITTI_PATH = '/home/alex/github/waymo_to_kitti_converter/tools/pose'
@@ -397,6 +399,9 @@ class WaymoToKITTI(object):
             # it is, in fact, rotation around positive z
             rotation_y = -obj.box.heading - np.pi / 2
 
+            # track id
+            track_id = obj.id
+
             # not available
             truncated = 0
             occluded = 0
@@ -421,13 +426,14 @@ class WaymoToKITTI(object):
                                                                                    round(y, 2),
                                                                                    round(z, 2),
                                                                                    round(rotation_y, 2))
-            line_all = line[:-1] + ' ' + name + '\n'
+            line_all = line[:-1] + ' ' + name + ' ' + track_id + '\n'  # TODO: temp solution to add the track id
             # store the label
             fp_label = open(self.label_save_dir + name + '/' + self.prefix + str(file_idx).zfill(3) + str(frame_idx).zfill(3) + '.txt', 'a')
             fp_label.write(line)
             fp_label.close()
 
             fp_label_all.write(line_all)
+
         fp_label_all.close()
 
         # print(file_idx, frame_idx)
