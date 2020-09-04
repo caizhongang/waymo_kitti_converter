@@ -222,3 +222,16 @@ local evaluation (compute_detection_metrics_main). See the [official guide](http
 
 - [waymo-open-dataset](https://github.com/waymo-research/waymo-open-dataset)
 - [Waymo_Kitti_Adapter](https://github.com/Yao-Shao/Waymo_Kitti_Adapter)
+
+## Citation
+
+If you find this toolkit useful, please consider citing:
+
+```
+@article{yucai2020leveraging,
+  title={Leveraging Temporal Information for 3D Detection and Domain Adaptation},
+  author={Yu, Cunjun and Cai, Zhongang and Ren, Daxuan and Zhao, Haiyu},
+  journal={arXiv preprint arXiv:2006.16796},
+  year={2020}
+}
+```
