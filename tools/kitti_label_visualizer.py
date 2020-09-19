@@ -7,7 +7,7 @@ from objects3d_utils import get_objects_from_label
 from scipy.spatial import Delaunay
 import scipy
 from waymo_open_dataset.utils.box_utils import compute_num_points_in_box_3d
-import tensorflow as tf
+#import tensorflow as tf
 
 
 # kitti
@@ -20,9 +20,9 @@ import tensorflow as tf
 # label_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/label_all/00000-00000.txt'
 # calib_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/waymo_kitti/calib/00000-00000.txt'
 
-pc_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/pkl_debug/converted/velodyne/4000000.bin'
-label_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/pkl_debug/converted/label_all/4000000.txt'
-calib_pathname = '/home/alex/github/waymo_to_kitti_converter/tools/pkl_debug/converted/calib/4000000.txt'
+pc_pathname = '/home/caizhongang/playground/kitti/test_point_cloud/006985.bin'
+label_pathname = '/home/caizhongang/playground/kitti/test_label/006985.txt'
+calib_pathname = '/home/caizhongang/playground/kitti/test_calib/006985.txt'
 
 # pc_range = [0, -40, -3.0, 70.4, 40, 3.0]
 pc_range = None
